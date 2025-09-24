@@ -135,3 +135,12 @@ public
 
 # TernJS port file
 .tern-port
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Google Services (contains API keys)
+**/google-services.json
+**/GoogleService-Info.plist

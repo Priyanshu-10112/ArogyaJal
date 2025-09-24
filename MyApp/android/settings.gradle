@@ -1,0 +1,10 @@
+rootProject.name = 'MyApp'
+def topLevelCli = file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
+def nestedCli = file("../node_modules/react-native/node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
+def gradleFile = topLevelCli.exists() ? topLevelCli : nestedCli
+if (!gradleFile.exists()) {
+  throw new GradleException("native_modules.gradle not found in expected locations")
+}
+apply from: gradleFile; applyNativeModulesSettingsGradle(settings)
+include ':app'
+includeBuild('../node_modules/@react-native/gradle-plugin')

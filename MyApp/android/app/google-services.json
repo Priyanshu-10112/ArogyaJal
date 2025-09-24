@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "245986373726",
+    "project_id": "arogyajal-979e2",
+    "storage_bucket": "arogyajal-979e2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:245986373726:android:2a1ddc097b5c902897c4cf",
+        "android_client_info": {
+          "package_name": "com.Arogya_jal.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCajkro2nkYd2VVTG79cH-K29vwsmrPxeU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

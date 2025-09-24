@@ -1,0 +1,223 @@
+# Arogyajal Backend Application Configuration
+spring:
+  application:
+    name: arogyajal-backend
+  
+  # MongoDB Configuration
+  data:
+    mongodb:
+      # MongoDB connection URI - replace with your actual MongoDB connection string
+      uri: ${MONGODB_URI:mongodb://localhost:27017/arogyajal}
+      # Alternative configuration if using separate host, port, database
+      # host: ${MONGODB_HOST:localhost}
+      # port: ${MONGODB_PORT:27017}
+      # database: ${MONGODB_DATABASE:arogyajal}
+      # username: ${MONGODB_USERNAME:}
+      # password: ${MONGODB_PASSWORD:}
+      # authentication-database: ${MONGODB_AUTH_DATABASE:admin}
+  
+  # Security Configuration
+  security:
+    # JWT Configuration (if using JWT authentication)
+    jwt:
+      secret: ${JWT_SECRET:your-jwt-secret-key-here}
+      expiration: ${JWT_EXPIRATION:86400000} # 24 hours in milliseconds
+  
+  # Web Configuration
+  web:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+      allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+      allowed-headers: ${CORS_ALLOWED_HEADERS:*}
+      allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+
+# Server Configuration
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    context-path: ${SERVER_CONTEXT_PATH:/}
+  compression:
+    enabled: ${SERVER_COMPRESSION_ENABLED:true}
+    mime-types: ${SERVER_COMPRESSION_MIME_TYPES:text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json}
+    min-response-size: ${SERVER_COMPRESSION_MIN_SIZE:1024}
+
+# Firebase Configuration
+firebase:
+  project-id: ${FIREBASE_PROJECT_ID:your-firebase-project-id}
+  credentials:
+    path: ${FIREBASE_CREDENTIALS_PATH:}
+  database-url: ${FIREBASE_DATABASE_URL:https://your-project-id-default-rtdb.firebaseio.com/}
+  
+  # Firebase Cloud Messaging (FCM) Configuration
+  fcm:
+    server-key: ${FCM_SERVER_KEY:your-fcm-server-key}
+    sender-id: ${FCM_SENDER_ID:your-fcm-sender-id}
+
+# Alert Configuration
+alerts:
+  # Water Quality Thresholds
+  thresholds:
+    ph:
+      min: ${ALERT_PH_MIN:6.5}
+      max: ${ALERT_PH_MAX:8.5}
+    temperature:
+      max: ${ALERT_TEMPERATURE_MAX:30.0}
+    turbidity:
+      max: ${ALERT_TURBIDITY_MAX:5.0}
+    dissolved-oxygen:
+      min: ${ALERT_DISSOLVED_OXYGEN_MIN:5.0}
+    conductivity:
+      max: ${ALERT_CONDUCTIVITY_MAX:1000.0}
+    total-dissolved-solids:
+      max: ${ALERT_TDS_MAX:500.0}
+    chlorine:
+      max: ${ALERT_CHLORINE_MAX:4.0}
+    hardness:
+      max: ${ALERT_HARDNESS_MAX:300.0}
+  
+  # Symptom Cluster Detection
+  symptom-cluster:
+    time-window-hours: ${SYMPTOM_CLUSTER_TIME_WINDOW:24}
+    minimum-reports: ${SYMPTOM_CLUSTER_MIN_REPORTS:5}
+    severity-threshold: ${SYMPTOM_CLUSTER_SEVERITY_THRESHOLD:MODERATE}
+  
+  # Notification Settings
+  notifications:
+    enabled: ${NOTIFICATIONS_ENABLED:true}
+    email:
+      enabled: ${EMAIL_NOTIFICATIONS_ENABLED:true}
+      smtp-host: ${EMAIL_SMTP_HOST:smtp.gmail.com}
+      smtp-port: ${EMAIL_SMTP_PORT:587}
+      username: ${EMAIL_USERNAME:}
+      password: ${EMAIL_PASSWORD:}
+      from: ${EMAIL_FROM:noreply@arogyajal.com}
+    sms:
+      enabled: ${SMS_NOTIFICATIONS_ENABLED:false}
+      provider: ${SMS_PROVIDER:twilio}
+      account-sid: ${SMS_ACCOUNT_SID:}
+      auth-token: ${SMS_AUTH_TOKEN:}
+      from-number: ${SMS_FROM_NUMBER:}
+    push:
+      enabled: ${PUSH_NOTIFICATIONS_ENABLED:true}
+
+# Logging Configuration
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.arogyajal: ${LOG_LEVEL_APP:DEBUG}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:DEBUG}
+    org.springframework.data.mongodb: ${LOG_LEVEL_MONGODB:DEBUG}
+    com.google.firebase: ${LOG_LEVEL_FIREBASE:INFO}
+  pattern:
+    console: ${LOG_PATTERN_CONSOLE:%d{yyyy-MM-dd HH:mm:ss} - %msg%n}
+    file: ${LOG_PATTERN_FILE:%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n}
+  file:
+    name: ${LOG_FILE_NAME:logs/arogyajal-backend.log}
+    max-size: ${LOG_FILE_MAX_SIZE:10MB}
+    max-history: ${LOG_FILE_MAX_HISTORY:30}
+
+# Management and Monitoring (Spring Boot Actuator)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${ACTUATOR_ENDPOINTS:health,info,metrics,prometheus}
+      base-path: ${ACTUATOR_BASE_PATH:/actuator}
+  endpoint:
+    health:
+      show-details: ${ACTUATOR_HEALTH_SHOW_DETAILS:when-authorized}
+      show-components: ${ACTUATOR_HEALTH_SHOW_COMPONENTS:always}
+  info:
+    env:
+      enabled: ${ACTUATOR_INFO_ENV_ENABLED:true}
+    java:
+      enabled: ${ACTUATOR_INFO_JAVA_ENABLED:true}
+    build:
+      enabled: ${ACTUATOR_INFO_BUILD_ENABLED:true}
+    git:
+      enabled: ${ACTUATOR_INFO_GIT_ENABLED:true}
+
+# Swagger/OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: ${SWAGGER_API_DOCS_PATH:/v3/api-docs}
+  swagger-ui:
+    path: ${SWAGGER_UI_PATH:/swagger-ui.html}
+    enabled: ${SWAGGER_UI_ENABLED:true}
+    operations-sorter: ${SWAGGER_UI_OPERATIONS_SORTER:method}
+    tags-sorter: ${SWAGGER_UI_TAGS_SORTER:alpha}
+    try-it-out-enabled: ${SWAGGER_UI_TRY_IT_OUT_ENABLED:true}
+
+# Application-specific Configuration
+arogyajal:
+  # Data Retention Settings
+  data-retention:
+    sensor-readings-days: ${DATA_RETENTION_SENSOR_DAYS:90}
+    symptom-reports-days: ${DATA_RETENTION_SYMPTOM_DAYS:365}
+    alerts-days: ${DATA_RETENTION_ALERTS_DAYS:180}
+  
+  # Cache Configuration
+  cache:
+    enabled: ${CACHE_ENABLED:true}
+    ttl-seconds: ${CACHE_TTL_SECONDS:300}
+    max-entries: ${CACHE_MAX_ENTRIES:1000}
+  
+  # Rate Limiting
+  rate-limiting:
+    enabled: ${RATE_LIMITING_ENABLED:true}
+    requests-per-minute: ${RATE_LIMITING_REQUESTS_PER_MINUTE:100}
+    burst-capacity: ${RATE_LIMITING_BURST_CAPACITY:200}
+
+# Environment-specific overrides
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/arogyajal-dev
+  security:
+    jwt:
+      secret: dev-jwt-secret-key
+  web:
+    cors:
+      allowed-origins: http://localhost:3000,http://localhost:3001,http://localhost:8080
+
+logging:
+  level:
+    com.arogyajal: DEBUG
+    org.springframework.security: DEBUG
+
+firebase:
+  project-id: arogyajal-dev
+  database-url: https://arogyajal-dev-default-rtdb.firebaseio.com/
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+  data:
+    mongodb:
+      uri: ${MONGODB_URI}
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+
+logging:
+  level:
+    root: WARN
+    com.arogyajal: INFO
+
+firebase:
+  project-id: ${FIREBASE_PROJECT_ID}
+  database-url: ${FIREBASE_DATABASE_URL}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

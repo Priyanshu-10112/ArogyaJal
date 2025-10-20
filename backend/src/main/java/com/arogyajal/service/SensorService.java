@@ -19,9 +19,11 @@ public class SensorService {
     
     private static final Logger log = LoggerFactory.getLogger(SensorService.class);
     private final SensorRepository sensorRepository;
+    private final MLPredictionService mlPredictionService;
     
-    public SensorService(SensorRepository sensorRepository) {
+    public SensorService(SensorRepository sensorRepository, MLPredictionService mlPredictionService) {
         this.sensorRepository = sensorRepository;
+        this.mlPredictionService = mlPredictionService;
     }
     
     /**
@@ -89,7 +91,28 @@ public class SensorService {
                 reading.setHardness(0.0);       // Default value for hardness
                 reading.setWaterLevel(0.0);     // Default value for water level
                 reading.setFlowRate(0.0);       // Default value for flow rate
-                reading.setQualityStatus("UNKNOWN"); // Default quality status
+                
+                // Call ML service to predict WQI
+                try {
+                    MLPredictionService.WQIPrediction prediction = mlPredictionService.predictWQI(
+                        reading.getPh(),
+                        reading.getTemperature(),
+                        reading.getTotalDissolvedSolids(),
+                        reading.getDissolvedOxygen(),
+                        reading.getTurbidity()
+                    );
+                    
+                    if (prediction.isSuccess()) {
+                        reading.setQualityStatus(prediction.getQualityStatus());
+                        log.info("ML Prediction - WQI: {}, Status: {}", prediction.getWqi(), prediction.getQualityStatus());
+                    } else {
+                        reading.setQualityStatus("UNKNOWN");
+                        log.warn("ML prediction failed: {}", prediction.getErrorMessage());
+                    }
+                } catch (Exception e) {
+                    log.error("Error calling ML service: {}", e.getMessage());
+                    reading.setQualityStatus("UNKNOWN");
+                }
             } else {
                 // If no sensor data is available, set all values to defaults
                 reading.setPh(0.0);

@@ -463,105 +463,182 @@ const Dashboard: React.FC = () => {
   
   // Water quality score is calculated but not currently displayed
 
+  // Get quality status color and icon
+  const getQualityStatusInfo = (status: string) => {
+    switch (status?.toUpperCase()) {
+      case 'EXCELLENT':
+        return { color: '#4caf50', icon: '🌟', bgColor: '#e8f5e8' };
+      case 'GOOD':
+        return { color: '#8bc34a', icon: '✅', bgColor: '#f1f8e9' };
+      case 'MEDIUM':
+        return { color: '#ff9800', icon: '⚠️', bgColor: '#fff3e0' };
+      case 'POOR':
+        return { color: '#f44336', icon: '❌', bgColor: '#ffebee' };
+      case 'VERY POOR':
+        return { color: '#d32f2f', icon: '🚫', bgColor: '#ffcdd2' };
+      default:
+        return { color: '#9e9e9e', icon: '❓', bgColor: '#f5f5f5' };
+    }
+  };
+
+  const qualityInfo = getQualityStatusInfo(dashboardData.deviceData?.qualityStatus || 'UNKNOWN');
+
   return (
     <div className="page-content">
+      {/* Header Section */}
       <div className="dashboard-header">
-        <h1>Water Quality Dashboard</h1>
-        {dashboardData.deviceData ? (
-          <div className="device-info">
-            <div className="device-header">
-              <h3>Device Information</h3>
-              <div className="device-id-badge">
-                <span className="device-id-label">Device ID:</span>
-                <span className="device-id-value">{dashboardData.deviceData.deviceId}</span>
-              </div>
-            </div>
-            <div className="sensor-reading">
-              <span className="sensor-label">Turbidity:</span>
-              <span className="sensor-value">
-                {dashboardData.deviceData.turbidity !== null ? dashboardData.deviceData.turbidity.toFixed(2) : 'N/A'}
-              </span>
-              <span className="sensor-unit">NTU</span>
-            </div>
-            <div className="sensor-reading">
-              <span className="sensor-label">TDS:</span>
-              <span className="sensor-value">
-                {dashboardData.deviceData.totalDissolvedSolids !== null ? dashboardData.deviceData.totalDissolvedSolids.toFixed(0) : 'N/A'}
-              </span>
-              <span className="sensor-unit">ppm</span>
-            </div>
-            <div className="sensor-reading">
-              <span className="sensor-label">Dissolved Oxygen:</span>
-              <span className="sensor-value">
-                {dashboardData.deviceData.dissolvedOxygen !== null ? dashboardData.deviceData.dissolvedOxygen.toFixed(2) : 'N/A'}
-              </span>
-              <span className="sensor-unit">mg/L</span>
-            </div>
-            <div className="sensor-reading">
-              <span className="sensor-label">Temperature:</span>
-              <span className="sensor-value">
-                {dashboardData.deviceData.temperature !== null ? dashboardData.deviceData.temperature.toFixed(1) : 'N/A'}
-              </span>
-              <span className="sensor-unit">°C</span>
-            </div>
+        <div className="header-left">
+          <h1>🌊 ArogyaJal Water Quality Monitor</h1>
+          <div className="realtime-indicator">
+            <div className="pulse"></div>
+            <span>Live Monitoring</span>
           </div>
-        ) : (
-          <div>No sensor data available</div>
-        )}
-        <div className="dashboard-card">
-          <h3>Water Quality</h3>
-          <div className="metric">
-            <span className="metric-value">{waterQualityScore}%</span>
-            <span className="metric-label">Overall Score</span>
+        </div>
+        <div className="header-right">
+          <div className="current-time">
+            <span className="time-label">Current Time</span>
+            <span className="time-value">{currentTime}</span>
           </div>
         </div>
       </div>
 
+      {/* Water Quality Status Banner */}
+      {dashboardData.deviceData && (
+        <div className="quality-status-banner" style={{ backgroundColor: qualityInfo.bgColor, borderLeft: `5px solid ${qualityInfo.color}` }}>
+          <div className="quality-status-content">
+            <div className="quality-icon">{qualityInfo.icon}</div>
+            <div className="quality-info">
+              <h2 style={{ color: qualityInfo.color }}>
+                Water Quality: {dashboardData.deviceData.qualityStatus || 'UNKNOWN'}
+              </h2>
+              <p>Device: <strong>{dashboardData.deviceData.deviceId}</strong> | 
+                 Location: <strong>{dashboardData.deviceData.location}</strong> | 
+                 Last Updated: <strong>{dashboardData.deviceData.timestamp}</strong>
+              </p>
+            </div>
+            <div className="quality-score">
+              <div className="score-circle" style={{ borderColor: qualityInfo.color }}>
+                <span className="score-value" style={{ color: qualityInfo.color }}>{waterQualityScore}</span>
+                <span className="score-label">Score</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sensor Data Grid */}
       {dashboardData.deviceData && (
         <div className="dashboard-container">
-          <div className="sensor-data">
-            <div className="data-grid">
-              <div className="data-card">
-                <div className="data-value">{dashboardData.deviceData.ph.toFixed(2)}</div>
-                <div className="data-label">pH Level</div>
-                <div className={`status-indicator ${getStatusClass(dashboardData.deviceData.ph, 6.5, 8.5)}`}></div>
+          <div className="sensor-grid">
+            {/* pH Level Card */}
+            <div className="sensor-card">
+              <div className="sensor-header">
+                <span className="sensor-icon">🧪</span>
+                <span className="sensor-title">pH Level</span>
+                <div className={`status-dot ${getStatusClass(dashboardData.deviceData.ph, 6.5, 8.5)}`}></div>
               </div>
-
-              <div className="data-card">
-                <div className="data-value">{dashboardData.deviceData.turbidity.toFixed(2)}</div>
-                <div className="data-label">Turbidity (NTU)</div>
-                <div className={`status-indicator ${getStatusClass(dashboardData.deviceData.turbidity, 0, 5, true)}`}></div>
-              </div>
-
-              <div className="data-card">
-                <div className="data-value">{dashboardData.deviceData.dissolvedOxygen.toFixed(2)}</div>
-                <div className="data-label">Dissolved O₂ (mg/L)</div>
-                <div className={`status-indicator ${getStatusClass(dashboardData.deviceData.dissolvedOxygen, 5, 10)}`}></div>
-              </div>
-
-              <div className="data-card">
-                <div className="data-value">{dashboardData.deviceData.temperature.toFixed(2)}°C</div>
-                <div className="data-label">Temperature</div>
-                <div className={`status-indicator ${getStatusClass(dashboardData.deviceData.temperature, 10, 30)}`}></div>
-              </div>
-
-              <div className="data-card">
-                <div className="data-value">{dashboardData.deviceData.batteryVoltage.toFixed(2)}V</div>
-                <div className="data-label">Battery</div>
-                <div className={`status-indicator ${getStatusClass(dashboardData.deviceData.batteryVoltage, 3.6, 4.2)}`}></div>
-              </div>
-
-              <div className="data-card location-card">
-                <div className="location-icon">📍</div>
-                <div className="location-details">
-                  <div className="data-label">Location</div>
-                  <div className="location-coords">{dashboardData.deviceData.location}</div>
-                </div>
+              <div className="sensor-value">{dashboardData.deviceData.ph.toFixed(2)}</div>
+              <div className="sensor-range">Optimal: 6.5 - 8.5</div>
+              <div className="sensor-description">
+                {dashboardData.deviceData.ph < 6.5 ? 'Acidic' : 
+                 dashboardData.deviceData.ph > 8.5 ? 'Alkaline' : 'Normal'}
               </div>
             </div>
 
-            <div className="last-updated">
-              Last updated: {currentTime || 'Loading...'}
+            {/* Turbidity Card */}
+            <div className="sensor-card">
+              <div className="sensor-header">
+                <span className="sensor-icon">🌫️</span>
+                <span className="sensor-title">Turbidity</span>
+                <div className={`status-dot ${getStatusClass(dashboardData.deviceData.turbidity, 0, 5, true)}`}></div>
+              </div>
+              <div className="sensor-value">{dashboardData.deviceData.turbidity.toFixed(2)} <span className="unit">NTU</span></div>
+              <div className="sensor-range">Optimal: 0 - 5 NTU</div>
+              <div className="sensor-description">
+                {dashboardData.deviceData.turbidity <= 5 ? 'Clear' : 
+                 dashboardData.deviceData.turbidity <= 15 ? 'Slightly Cloudy' : 'Very Cloudy'}
+              </div>
+            </div>
+
+            {/* TDS Card */}
+            <div className="sensor-card">
+              <div className="sensor-header">
+                <span className="sensor-icon">💧</span>
+                <span className="sensor-title">Total Dissolved Solids</span>
+                <div className={`status-dot ${getStatusClass(dashboardData.deviceData.totalDissolvedSolids, 0, 300, true)}`}></div>
+              </div>
+              <div className="sensor-value">{dashboardData.deviceData.totalDissolvedSolids.toFixed(0)} <span className="unit">ppm</span></div>
+              <div className="sensor-range">Optimal: 0 - 300 ppm</div>
+              <div className="sensor-description">
+                {dashboardData.deviceData.totalDissolvedSolids <= 300 ? 'Good' : 
+                 dashboardData.deviceData.totalDissolvedSolids <= 600 ? 'Fair' : 'Poor'}
+              </div>
+            </div>
+
+            {/* Dissolved Oxygen Card */}
+            <div className="sensor-card">
+              <div className="sensor-header">
+                <span className="sensor-icon">🫧</span>
+                <span className="sensor-title">Dissolved Oxygen</span>
+                <div className={`status-dot ${getStatusClass(dashboardData.deviceData.dissolvedOxygen, 5, 15)}`}></div>
+              </div>
+              <div className="sensor-value">{dashboardData.deviceData.dissolvedOxygen.toFixed(2)} <span className="unit">mg/L</span></div>
+              <div className="sensor-range">Optimal: &gt; 5 mg/L</div>
+              <div className="sensor-description">
+                {dashboardData.deviceData.dissolvedOxygen >= 7 ? 'Excellent' : 
+                 dashboardData.deviceData.dissolvedOxygen >= 5 ? 'Good' : 'Low'}
+              </div>
+            </div>
+
+            {/* Temperature Card */}
+            <div className="sensor-card">
+              <div className="sensor-header">
+                <span className="sensor-icon">🌡️</span>
+                <span className="sensor-title">Temperature</span>
+                <div className={`status-dot ${getStatusClass(dashboardData.deviceData.temperature, 15, 30)}`}></div>
+              </div>
+              <div className="sensor-value">{dashboardData.deviceData.temperature.toFixed(1)} <span className="unit">°C</span></div>
+              <div className="sensor-range">Optimal: 15 - 30°C</div>
+              <div className="sensor-description">
+                {dashboardData.deviceData.temperature < 15 ? 'Cold' : 
+                 dashboardData.deviceData.temperature > 30 ? 'Warm' : 'Normal'}
+              </div>
+            </div>
+
+            {/* Battery Status Card */}
+            <div className="sensor-card">
+              <div className="sensor-header">
+                <span className="sensor-icon">🔋</span>
+                <span className="sensor-title">Battery Status</span>
+                <div className={`status-dot ${getStatusClass(dashboardData.deviceData.batteryVoltage, 3.6, 4.2)}`}></div>
+              </div>
+              <div className="sensor-value">{dashboardData.deviceData.batteryVoltage.toFixed(2)} <span className="unit">V</span></div>
+              <div className="sensor-range">Normal: 3.6 - 4.2V</div>
+              <div className="sensor-description">
+                {dashboardData.deviceData.batteryVoltage >= 4.0 ? 'Full' : 
+                 dashboardData.deviceData.batteryVoltage >= 3.7 ? 'Good' : 'Low'}
+              </div>
+            </div>
+          </div>
+
+          {/* Additional Info Section */}
+          <div className="info-section">
+            <div className="info-card">
+              <h3>📍 Location Information</h3>
+              <p><strong>Coordinates:</strong> {dashboardData.deviceData.location}</p>
+              <p><strong>Device ID:</strong> {dashboardData.deviceData.deviceId}</p>
+              <p><strong>Last Reading:</strong> {dashboardData.deviceData.timestamp}</p>
+            </div>
+            
+            <div className="info-card">
+              <h3>📊 Quality Assessment</h3>
+              <p><strong>ML Prediction:</strong> {dashboardData.deviceData.qualityStatus}</p>
+              <p><strong>Overall Score:</strong> {waterQualityScore}/100</p>
+              <p><strong>Status:</strong> 
+                {waterQualityScore >= 90 ? ' Excellent water quality' :
+                 waterQualityScore >= 70 ? ' Good water quality' :
+                 waterQualityScore >= 50 ? ' Fair water quality' : ' Poor water quality'}
+              </p>
             </div>
           </div>
         </div>
@@ -571,27 +648,31 @@ const Dashboard: React.FC = () => {
         .dashboard-header {
           display: flex;
           justify-content: space-between;
-          align-items: center;
+          align-items: flex-start;
           margin-bottom: 2rem;
+          padding: 1.5rem;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          border-radius: 12px;
+          color: white;
         }
 
-        .status-bar {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
+        .header-left h1 {
+          margin: 0 0 0.5rem 0;
+          font-size: 2rem;
+          font-weight: 600;
         }
 
         .realtime-indicator {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          color: #4caf50;
-          font-weight: bold;
+          font-size: 0.9rem;
+          opacity: 0.9;
         }
 
         .pulse {
-          width: 10px;
-          height: 10px;
+          width: 8px;
+          height: 8px;
           background-color: #4caf50;
           border-radius: 50%;
           animation: pulse 2s infinite;
@@ -603,71 +684,206 @@ const Dashboard: React.FC = () => {
           100% { transform: scale(0.95); opacity: 0.7; }
         }
 
-        .data-grid {
+        .header-right {
+          text-align: right;
+        }
+
+        .time-label {
+          display: block;
+          font-size: 0.8rem;
+          opacity: 0.8;
+          margin-bottom: 0.25rem;
+        }
+
+        .time-value {
+          font-size: 1.1rem;
+          font-weight: 500;
+        }
+
+        .quality-status-banner {
+          margin-bottom: 2rem;
+          padding: 1.5rem;
+          border-radius: 12px;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .quality-status-content {
+          display: flex;
+          align-items: center;
+          gap: 1.5rem;
+        }
+
+        .quality-icon {
+          font-size: 3rem;
+        }
+
+        .quality-info {
+          flex: 1;
+        }
+
+        .quality-info h2 {
+          margin: 0 0 0.5rem 0;
+          font-size: 1.8rem;
+          font-weight: 600;
+        }
+
+        .quality-info p {
+          margin: 0;
+          color: #666;
+          font-size: 0.95rem;
+        }
+
+        .quality-score {
+          display: flex;
+          align-items: center;
+        }
+
+        .score-circle {
+          width: 80px;
+          height: 80px;
+          border: 3px solid;
+          border-radius: 50%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          background: white;
+        }
+
+        .score-value {
+          font-size: 1.5rem;
+          font-weight: bold;
+          line-height: 1;
+        }
+
+        .score-label {
+          font-size: 0.7rem;
+          color: #666;
+        }
+
+        .sensor-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
           gap: 1.5rem;
           margin-bottom: 2rem;
         }
 
-        .data-card {
+        .sensor-card {
           background: white;
-          border-radius: 8px;
+          border-radius: 12px;
           padding: 1.5rem;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          position: relative;
-          overflow: hidden;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          border: 1px solid #e0e0e0;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .data-card::after {
-          content: '';
-          position: absolute;
-          top: 0;
-          right: 0;
-          width: 4px;
-          height: 100%;
-          background: #4caf50;
+        .sensor-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 15px rgba(0,0,0,0.15);
         }
 
-        .data-value {
-          font-size: 2rem;
-          font-weight: bold;
-          margin-bottom: 0.5rem;
+        .sensor-header {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          margin-bottom: 1rem;
         }
 
-        .data-label {
-          color: #666;
-          font-size: 0.9rem;
+        .sensor-icon {
+          font-size: 1.5rem;
         }
 
-        .status-indicator {
-          position: absolute;
-          top: 1rem;
-          right: 1rem;
-          width: 10px;
-          height: 10px;
+        .sensor-title {
+          font-weight: 600;
+          color: #333;
+          flex: 1;
+        }
+
+        .status-dot {
+          width: 12px;
+          height: 12px;
           border-radius: 50%;
         }
 
         .status-good { background-color: #4caf50; }
-        .status-warning { background-color: #ffc107; }
+        .status-warning { background-color: #ff9800; }
         .status-critical { background-color: #f44336; }
 
-        .location-card {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
+        .sensor-value {
+          font-size: 2.5rem;
+          font-weight: bold;
+          color: #333;
+          margin-bottom: 0.5rem;
+          line-height: 1;
         }
 
-        .location-icon {
-          font-size: 2rem;
+        .unit {
+          font-size: 1rem;
+          color: #666;
+          font-weight: normal;
         }
 
-        .last-updated {
-          text-align: right;
+        .sensor-range {
+          font-size: 0.85rem;
+          color: #666;
+          margin-bottom: 0.5rem;
+        }
+
+        .sensor-description {
+          font-size: 0.9rem;
+          color: #4caf50;
+          font-weight: 500;
+        }
+
+        .info-section {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 1.5rem;
+          margin-top: 2rem;
+        }
+
+        .info-card {
+          background: white;
+          border-radius: 12px;
+          padding: 1.5rem;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          border: 1px solid #e0e0e0;
+        }
+
+        .info-card h3 {
+          margin: 0 0 1rem 0;
+          color: #333;
+          font-size: 1.1rem;
+        }
+
+        .info-card p {
+          margin: 0.5rem 0;
           color: #666;
           font-size: 0.9rem;
-          margin-top: 1rem;
+        }
+
+        .info-card strong {
+          color: #333;
+        }
+
+        @media (max-width: 768px) {
+          .dashboard-header {
+            flex-direction: column;
+            gap: 1rem;
+          }
+
+          .quality-status-content {
+            flex-direction: column;
+            text-align: center;
+          }
+
+          .sensor-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .info-section {
+            grid-template-columns: 1fr;
+          }
         }
       `}</StyledJsxStyle>
     </div>

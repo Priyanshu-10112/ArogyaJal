@@ -24,6 +24,24 @@ class SensorStatisticsResponse {
     private long totalReadings;
     private List<String> deviceIds = new ArrayList<>();
     private List<String> locations = new ArrayList<>();
+	public long getTotalReadings() {
+		return totalReadings;
+	}
+	public void setTotalReadings(long totalReadings) {
+		this.totalReadings = totalReadings;
+	}
+	public List<String> getDeviceIds() {
+		return deviceIds;
+	}
+	public void setDeviceIds(List<String> deviceIds) {
+		this.deviceIds = deviceIds;
+	}
+	public List<String> getLocations() {
+		return locations;
+	}
+	public void setLocations(List<String> locations) {
+		this.locations = locations;
+	}
 }
 
 @RestController

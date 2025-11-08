@@ -2,8 +2,8 @@ package com.arogyajal.model;
 
 import com.google.cloud.firestore.annotation.DocumentId;
 import com.google.cloud.firestore.annotation.ServerTimestamp;
+import com.google.cloud.Timestamp;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 //import java.util.Objects;
@@ -27,13 +27,13 @@ public class Alert {
     private Double actualValue;
     private String sensorReadingId;
     @ServerTimestamp
-    private LocalDateTime triggeredAt;
+    private Timestamp triggeredAt;
     
     @ServerTimestamp
-    private LocalDateTime acknowledgedAt;
+    private Timestamp acknowledgedAt;
     
     @ServerTimestamp
-    private LocalDateTime resolvedAt;
+    private Timestamp resolvedAt;
     private String status; // ACTIVE, ACKNOWLEDGED, RESOLVED, DISMISSED
     private String notificationMethod; // EMAIL, SMS, PUSH, etc.
     private List<String> relatedSymptomReportIds = new ArrayList<>();
@@ -50,8 +50,8 @@ public class Alert {
 
     public Alert(String id, String alertType, String severity, String title, String description, String location,
                 String sensorId, String parameter, Double thresholdValue, Double actualValue, String sensorReadingId,
-                List<String> relatedSymptomReportIds, LocalDateTime triggeredAt, LocalDateTime acknowledgedAt,
-                LocalDateTime resolvedAt, String status, List<String> notifiedUsers, String notificationMethod,
+                List<String> relatedSymptomReportIds, Timestamp triggeredAt, Timestamp acknowledgedAt,
+                Timestamp resolvedAt, String status, List<String> notifiedUsers, String notificationMethod,
                 String resolutionNotes, String resolvedBy, List<String> affectedUsers, String actionTaken, String notes) {
         this.id = id;
         this.alertType = alertType;
@@ -175,27 +175,27 @@ public class Alert {
         this.relatedSymptomReportIds = relatedSymptomReportIds;
     }
 
-    public LocalDateTime getTriggeredAt() {
+    public Timestamp getTriggeredAt() {
         return triggeredAt;
     }
 
-    public void setTriggeredAt(LocalDateTime triggeredAt) {
+    public void setTriggeredAt(Timestamp triggeredAt) {
         this.triggeredAt = triggeredAt;
     }
 
-    public LocalDateTime getAcknowledgedAt() {
+    public Timestamp getAcknowledgedAt() {
         return acknowledgedAt;
     }
 
-    public void setAcknowledgedAt(LocalDateTime acknowledgedAt) {
+    public void setAcknowledgedAt(Timestamp acknowledgedAt) {
         this.acknowledgedAt = acknowledgedAt;
     }
 
-    public LocalDateTime getResolvedAt() {
+    public Timestamp getResolvedAt() {
         return resolvedAt;
     }
 
-    public void setResolvedAt(LocalDateTime resolvedAt) {
+    public void setResolvedAt(Timestamp resolvedAt) {
         this.resolvedAt = resolvedAt;
     }
 
@@ -281,9 +281,9 @@ public class Alert {
         private Double actualValue;
         private String sensorReadingId;
         private List<String> relatedSymptomReportIds;
-        private LocalDateTime triggeredAt = LocalDateTime.now();
-        private LocalDateTime acknowledgedAt;
-        private LocalDateTime resolvedAt;
+        private Timestamp triggeredAt = Timestamp.now();
+        private Timestamp acknowledgedAt;
+        private Timestamp resolvedAt;
         private String status = "ACTIVE";
         private List<String> notifiedUsers = new ArrayList<>();
         private String notificationMethod;
@@ -353,17 +353,17 @@ public class Alert {
             return this;
         }
 
-        public Builder triggeredAt(LocalDateTime triggeredAt) {
+        public Builder triggeredAt(Timestamp triggeredAt) {
             this.triggeredAt = triggeredAt;
             return this;
         }
 
-        public Builder acknowledgedAt(LocalDateTime acknowledgedAt) {
+        public Builder acknowledgedAt(Timestamp acknowledgedAt) {
             this.acknowledgedAt = acknowledgedAt;
             return this;
         }
 
-        public Builder resolvedAt(LocalDateTime resolvedAt) {
+        public Builder resolvedAt(Timestamp resolvedAt) {
             this.resolvedAt = resolvedAt;
             return this;
         }

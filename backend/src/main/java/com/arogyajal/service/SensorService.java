@@ -135,8 +135,12 @@ public class SensorService {
             
             // Save to database with a generated document ID
             String documentId = UUID.randomUUID().toString();
+            reading.setId(documentId);
             sensorRepository.save(reading, documentId);
             log.info("Saved sensor data for device: {} with ID: {}", deviceId, documentId);
+            
+            // TODO: Add AlertService integration later
+            // For now, alerts can be created manually via POST /api/alerts
             
             return sensorData;
             

@@ -2,6 +2,8 @@ package com.arogyajal.model;
 
 import com.google.cloud.firestore.annotation.DocumentId;
 import com.google.cloud.firestore.annotation.ServerTimestamp;
+import com.arogyajal.config.TimestampSerializer;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import com.google.cloud.Timestamp;
 
@@ -28,6 +30,7 @@ public class SensorReading {
     
     // Timestamp
     @ServerTimestamp
+    @JsonSerialize(using = TimestampSerializer.class)
     private Timestamp timestamp;
     
     // Quality status

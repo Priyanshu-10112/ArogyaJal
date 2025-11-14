@@ -144,3 +144,25 @@ public
 # Google Services (contains API keys)
 **/google-services.json
 **/GoogleService-Info.plist
+
+# Firebase credentials (IMPORTANT: Keep these secret!)
+**/firebase-service-account.json
+**/serviceAccountKey.json
+backend/src/main/resources/firebase-service-account.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ML Models (optional - can be large)
+# ML/models/*.pkl
+
+# Test scripts (optional)
+# *.ps1

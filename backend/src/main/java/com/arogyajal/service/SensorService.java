@@ -20,10 +20,12 @@ public class SensorService {
     private static final Logger log = LoggerFactory.getLogger(SensorService.class);
     private final SensorRepository sensorRepository;
     private final MLPredictionService mlPredictionService;
+    private final AlertService alertService;
     
-    public SensorService(SensorRepository sensorRepository, MLPredictionService mlPredictionService) {
+    public SensorService(SensorRepository sensorRepository, MLPredictionService mlPredictionService, AlertService alertService) {
         this.sensorRepository = sensorRepository;
         this.mlPredictionService = mlPredictionService;
+        this.alertService = alertService;
     }
     
     /**
@@ -106,12 +108,14 @@ public class SensorService {
                         reading.setQualityStatus(prediction.getQualityStatus());
                         log.info("ML Prediction - WQI: {}, Status: {}", prediction.getWqi(), prediction.getQualityStatus());
                     } else {
-                        reading.setQualityStatus("UNKNOWN");
-                        log.warn("ML prediction failed: {}", prediction.getErrorMessage());
+                        // Fallback: Calculate quality status based on parameters
+                        reading.setQualityStatus(calculateQualityStatus(reading));
+                        log.warn("ML prediction failed, using fallback calculation: {}", reading.getQualityStatus());
                     }
                 } catch (Exception e) {
-                    log.error("Error calling ML service: {}", e.getMessage());
-                    reading.setQualityStatus("UNKNOWN");
+                    log.error("Error calling ML service: {}, using fallback calculation", e.getMessage());
+                    // Fallback: Calculate quality status based on parameters
+                    reading.setQualityStatus(calculateQualityStatus(reading));
                 }
             } else {
                 // If no sensor data is available, set all values to defaults
@@ -139,8 +143,14 @@ public class SensorService {
             sensorRepository.save(reading, documentId);
             log.info("Saved sensor data for device: {} with ID: {}", deviceId, documentId);
             
-            // TODO: Add AlertService integration later
-            // For now, alerts can be created manually via POST /api/alerts
+            // Automatically check for water quality alerts
+            try {
+                alertService.checkForWaterQualityAlerts(reading);
+                log.info("Checked for water quality alerts for device: {}", deviceId);
+            } catch (Exception e) {
+                log.error("Error checking for alerts: {}", e.getMessage(), e);
+                // Don't fail the entire operation if alert check fails
+            }
             
             return sensorData;
             
@@ -556,9 +566,8 @@ public class SensorService {
             sensors.setTemperature_C(reading.getTemperature());
         }
         if (reading.getTurbidity() != null) {
-            int turbidityValue = reading.getTurbidity().intValue();
-            log.debug("Setting turbidity: {}", turbidityValue);
-            sensors.setTurbidity_NTU(turbidityValue);
+            log.debug("Setting turbidity: {}", reading.getTurbidity());
+            sensors.setTurbidity_NTU(reading.getTurbidity());
         }
         if (reading.getDissolvedOxygen() != null) {
             log.debug("Setting dissolved oxygen: {}", reading.getDissolvedOxygen());
@@ -604,9 +613,77 @@ public class SensorService {
             sensorData.setBattery(new SensorData.Battery());
         }
         
+        // Set quality status from reading
+        sensorData.setQualityStatus(reading.getQualityStatus());
+        
         // Log the final sensor data
         log.info("Converted SensorData: {}", sensorData);
         
         return sensorData;
+    }
+    
+    /**
+     * Fallback method to calculate quality status based on water parameters
+     * Used when ML service is unavailable
+     */
+    private String calculateQualityStatus(SensorReading reading) {
+        int criticalCount = 0;
+        int warningCount = 0;
+        
+        // Check pH (ideal: 6.5-8.5)
+        if (reading.getPh() != null) {
+            if (reading.getPh() < 6.0 || reading.getPh() > 9.0) {
+                criticalCount++;
+            } else if (reading.getPh() < 6.5 || reading.getPh() > 8.5) {
+                warningCount++;
+            }
+        }
+        
+        // Check temperature (ideal: < 30°C)
+        if (reading.getTemperature() != null) {
+            if (reading.getTemperature() > 35) {
+                criticalCount++;
+            } else if (reading.getTemperature() > 30) {
+                warningCount++;
+            }
+        }
+        
+        // Check TDS (ideal: < 500 ppm)
+        if (reading.getTotalDissolvedSolids() != null) {
+            if (reading.getTotalDissolvedSolids() > 1000) {
+                criticalCount++;
+            } else if (reading.getTotalDissolvedSolids() > 500) {
+                warningCount++;
+            }
+        }
+        
+        // Check DO (ideal: > 6 mg/L)
+        if (reading.getDissolvedOxygen() != null) {
+            if (reading.getDissolvedOxygen() < 4) {
+                criticalCount++;
+            } else if (reading.getDissolvedOxygen() < 6) {
+                warningCount++;
+            }
+        }
+        
+        // Check turbidity (ideal: < 5 NTU)
+        if (reading.getTurbidity() != null) {
+            if (reading.getTurbidity() > 10) {
+                criticalCount++;
+            } else if (reading.getTurbidity() > 5) {
+                warningCount++;
+            }
+        }
+        
+        // Determine overall status
+        if (criticalCount > 0) {
+            return "CRITICAL";
+        } else if (warningCount > 1) {
+            return "WARNING";
+        } else if (warningCount == 1) {
+            return "GOOD";
+        } else {
+            return "EXCELLENT";
+        }
     }
 }

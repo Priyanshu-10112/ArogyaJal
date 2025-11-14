@@ -19,6 +19,7 @@ import {
   getAllSensorReadings,
   type TrendsResponse,
   type SensorReading,
+  type DataPoint,
 } from '../services/api.service';
 
 // Register ChartJS components
@@ -102,8 +103,55 @@ const Trends: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await getWaterQualityTrends(timeRange);
-      setTrendsData(data);
+      // Fetch all readings and transform them into trends format
+      const readings = await getAllSensorReadings();
+      
+      // Helper function to convert timestamp to Date
+      const parseTimestamp = (timestamp: string | { seconds: number; nanos: number }): Date => {
+        if (typeof timestamp === 'string') {
+          return new Date(timestamp);
+        } else {
+          return new Date(timestamp.seconds * 1000);
+        }
+      };
+
+      // Filter readings by time range
+      const now = new Date();
+      const cutoffTime = new Date(now.getTime() - timeRange * 60 * 60 * 1000);
+      
+      const filteredReadings = readings.filter(reading => {
+        const readingTime = parseTimestamp(reading.timestamp);
+        return readingTime >= cutoffTime;
+      });
+
+      // Transform readings into trends format
+      const trends: { [key: string]: DataPoint[] } = {};
+      const latestValues: { [key: string]: number } = {};
+
+      PARAMETERS.forEach(param => {
+        trends[param.key] = filteredReadings
+          .filter(r => {
+            const value = r[param.key as keyof SensorReading];
+            return value !== null && value !== undefined;
+          })
+          .map(r => ({
+            timestamp: typeof r.timestamp === 'string' ? r.timestamp : new Date(r.timestamp.seconds * 1000).toISOString(),
+            value: Number(r[param.key as keyof SensorReading])
+          }))
+          .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        // Get latest value
+        if (trends[param.key].length > 0) {
+          latestValues[param.key] = trends[param.key][trends[param.key].length - 1].value;
+        }
+      });
+
+      setTrendsData({
+        trends,
+        latestValues,
+        timeRange: `${timeRange} hours`
+      });
+      setAllReadings(readings);
       setLastUpdated(new Date());
     } catch (err) {
       setError('Failed to load trends data. Please check if the backend is running.');

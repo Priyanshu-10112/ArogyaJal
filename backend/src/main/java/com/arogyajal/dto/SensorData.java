@@ -7,6 +7,7 @@ import com.google.cloud.firestore.annotation.ServerTimestamp;
 import com.arogyajal.config.TimestampDeserializer;
 import com.arogyajal.config.TimestampSerializer;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import java.util.Objects;
@@ -27,6 +28,8 @@ public class SensorData {
     private Sensors sensors;
     
     private Battery battery;
+    
+    private String qualityStatus;
 
     public SensorData() {
     }
@@ -37,6 +40,15 @@ public class SensorData {
         this.location = location;
         this.sensors = sensors;
         this.battery = battery;
+    }
+    
+    public SensorData(String deviceId, Timestamp timestamp, Location location, Sensors sensors, Battery battery, String qualityStatus) {
+        this.deviceId = deviceId;
+        this.timestamp = timestamp;
+        this.location = location;
+        this.sensors = sensors;
+        this.battery = battery;
+        this.qualityStatus = qualityStatus;
     }
 
     // Getters and Setters for SensorData
@@ -78,6 +90,14 @@ public class SensorData {
 
     public void setBattery(Battery battery) {
         this.battery = battery;
+    }
+
+    public String getQualityStatus() {
+        return qualityStatus;
+    }
+
+    public void setQualityStatus(String qualityStatus) {
+        this.qualityStatus = qualityStatus;
     }
 
     @Override
@@ -162,7 +182,77 @@ public class SensorData {
         }
     }
     
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.NONE, 
+                    getterVisibility = JsonAutoDetect.Visibility.NONE,
+                    setterVisibility = JsonAutoDetect.Visibility.NONE)
     public static class Sensors {
+        @JsonProperty("PH")
+        private Double pH;
+        
+        @JsonProperty("Turbidity_NTU")
+        private Double turbidity_NTU;
+        
+        @JsonProperty("TDS_ppm")
+        private Integer TDS_ppm;
+        
+        @JsonProperty("DO_mgL")
+        private Double DO_mgL;
+        
+        @JsonProperty("Temperature_C")
+        private Double temperature_C;
+
+        public Sensors() {
+        }
+
+        public Sensors(Double pH, Double turbidity_NTU, Integer TDS_ppm, Double DO_mgL, Double temperature_C) {
+            this.pH = pH;
+            this.turbidity_NTU = turbidity_NTU;
+            this.TDS_ppm = TDS_ppm;
+            this.DO_mgL = DO_mgL;
+            this.temperature_C = temperature_C;
+        }
+
+        // Getters and Setters for Sensors
+        public Double getPH() {
+            return pH;
+        }
+
+        public void setPH(Double pH) {
+            this.pH = pH;
+        }
+
+        public Double getTurbidity_NTU() {
+            return turbidity_NTU;
+        }
+
+        public void setTurbidity_NTU(Double turbidity_NTU) {
+            this.turbidity_NTU = turbidity_NTU;
+        }
+
+        public Integer getTDS_ppm() {
+            return TDS_ppm;
+        }
+
+        public void setTDS_ppm(Integer TDS_ppm) {
+            this.TDS_ppm = TDS_ppm;
+        }
+
+        public Double getDO_mgL() {
+            return DO_mgL;
+        }
+
+        public void setDO_mgL(Double DO_mgL) {
+            this.DO_mgL = DO_mgL;
+        }
+
+        public Double getTemperature_C() {
+            return temperature_C;
+        }
+
+        public void setTemperature_C(Double temperature_C) {
+            this.temperature_C = temperature_C;
+        }
+        
         @Override
         public String toString() {
             return "Sensors{" +
@@ -189,72 +279,6 @@ public class SensorData {
         @Override
         public int hashCode() {
             return Objects.hash(pH, turbidity_NTU, TDS_ppm, DO_mgL, temperature_C);
-        }
-        @JsonProperty("pH")
-        private Double pH;
-        
-        @JsonProperty("turbidity_NTU")
-        private Integer turbidity_NTU;
-        
-        @JsonProperty("TDS_ppm")
-        private Integer TDS_ppm;
-        
-        @JsonProperty("DO_mgL")
-        private Double DO_mgL;
-        
-        @JsonProperty("temperature_C")
-        private Double temperature_C;
-
-        public Sensors() {
-        }
-
-        public Sensors(Double pH, Integer turbidity_NTU, Integer TDS_ppm, Double DO_mgL, Double temperature_C) {
-            this.pH = pH;
-            this.turbidity_NTU = turbidity_NTU;
-            this.TDS_ppm = TDS_ppm;
-            this.DO_mgL = DO_mgL;
-            this.temperature_C = temperature_C;
-        }
-
-        // Getters and Setters for Sensors
-        public Double getPH() {
-            return pH;
-        }
-
-        public void setPH(Double pH) {
-            this.pH = pH;
-        }
-
-        public Integer getTurbidity_NTU() {
-            return turbidity_NTU;
-        }
-
-        public void setTurbidity_NTU(Integer turbidity_NTU) {
-            this.turbidity_NTU = turbidity_NTU;
-        }
-
-        public Integer getTDS_ppm() {
-            return TDS_ppm;
-        }
-
-        public void setTDS_ppm(Integer TDS_ppm) {
-            this.TDS_ppm = TDS_ppm;
-        }
-
-        public Double getDO_mgL() {
-            return DO_mgL;
-        }
-
-        public void setDO_mgL(Double DO_mgL) {
-            this.DO_mgL = DO_mgL;
-        }
-
-        public Double getTemperature_C() {
-            return temperature_C;
-        }
-
-        public void setTemperature_C(Double temperature_C) {
-            this.temperature_C = temperature_C;
         }
     }
     

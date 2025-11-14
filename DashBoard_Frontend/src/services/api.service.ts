@@ -27,18 +27,18 @@ export interface TrendsResponse {
 export interface SensorReading {
   id: string;
   sensorId: string;
-  timestamp: string;
+  timestamp: string | { seconds: number; nanos: number };
   location?: string;
-  ph: number;
-  temperature: number;
-  turbidity: number;
-  dissolvedOxygen: number;
-  totalDissolvedSolids: number;
-  conductivity?: number;
-  chlorine?: number;
-  hardness?: number;
-  waterLevel?: number;
-  flowRate?: number;
+  ph: number | null;
+  temperature: number | null;
+  turbidity: number | null;
+  dissolvedOxygen: number | null;
+  totalDissolvedSolids: number | null;
+  conductivity?: number | null;
+  chlorine?: number | null;
+  hardness?: number | null;
+  waterLevel?: number | null;
+  flowRate?: number | null;
   qualityStatus?: string;
   notes?: string;
 }

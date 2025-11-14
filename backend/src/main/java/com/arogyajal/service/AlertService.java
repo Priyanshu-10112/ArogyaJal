@@ -154,17 +154,34 @@ public class AlertService {
     public void checkForWaterQualityAlerts(SensorReading reading) {
         log.info("Checking for water quality alerts for sensor: {}", reading.getSensorId());
         try {
-            // Check for critical water quality parameters
-            if (reading.getPh() < 6.5 || reading.getPh() > 8.5) {
+            // Check pH levels (ideal: 6.5-8.5)
+            if (reading.getPh() != null && (reading.getPh() < 6.5 || reading.getPh() > 8.5)) {
                 createAlert(createWaterQualityAlert(reading, "pH", reading.getPh()));
             }
 
-            if (reading.getTurbidity() > 5.0) { // NTU
+            // Check turbidity (ideal: < 5 NTU)
+            if (reading.getTurbidity() != null && reading.getTurbidity() > 5.0) {
                 createAlert(createWaterQualityAlert(reading, "Turbidity", reading.getTurbidity()));
             }
 
-            if (reading.getConductivity() > 1000) { // µS/cm
+            // Check conductivity (ideal: < 1000 µS/cm)
+            if (reading.getConductivity() != null && reading.getConductivity() > 1000) {
                 createAlert(createWaterQualityAlert(reading, "Conductivity", reading.getConductivity()));
+            }
+            
+            // Check TDS (ideal: < 500 ppm)
+            if (reading.getTotalDissolvedSolids() != null && reading.getTotalDissolvedSolids() > 500) {
+                createAlert(createWaterQualityAlert(reading, "TDS", reading.getTotalDissolvedSolids()));
+            }
+            
+            // Check dissolved oxygen (ideal: > 5 mg/L)
+            if (reading.getDissolvedOxygen() != null && reading.getDissolvedOxygen() < 5.0) {
+                createAlert(createWaterQualityAlert(reading, "Dissolved Oxygen", reading.getDissolvedOxygen()));
+            }
+            
+            // Check temperature (ideal: < 30°C)
+            if (reading.getTemperature() != null && reading.getTemperature() > 30) {
+                createAlert(createWaterQualityAlert(reading, "Temperature", reading.getTemperature()));
             }
         } catch (Exception e) {
             log.error("Error checking for water quality alerts", e);
@@ -235,23 +252,43 @@ public class AlertService {
 
     private String getSeverityForParameter(String parameter, double value) {
         try {
-            // Simple threshold-based severity calculation
-            // This can be enhanced with more sophisticated logic
+            // Threshold-based severity calculation
             switch (parameter) {
                 case "pH":
                     if (value < 4.0 || value > 10.0) return "CRITICAL";
                     if (value < 5.0 || value > 9.0) return "HIGH";
-                    return "MEDIUM";
+                    if (value < 6.5 || value > 8.5) return "MEDIUM";
+                    return "LOW";
 
                 case "Turbidity":
                     if (value > 10.0) return "CRITICAL";
-                    if (value > 5.0) return "HIGH";
-                    return "MEDIUM";
+                    if (value > 7.0) return "HIGH";
+                    if (value > 5.0) return "MEDIUM";
+                    return "LOW";
 
                 case "Conductivity":
                     if (value > 2000) return "CRITICAL";
-                    if (value > 1000) return "HIGH";
-                    return "MEDIUM";
+                    if (value > 1500) return "HIGH";
+                    if (value > 1000) return "MEDIUM";
+                    return "LOW";
+                    
+                case "TDS":
+                    if (value > 1000) return "CRITICAL";
+                    if (value > 750) return "HIGH";
+                    if (value > 500) return "MEDIUM";
+                    return "LOW";
+                    
+                case "Dissolved Oxygen":
+                    if (value < 3.0) return "CRITICAL";
+                    if (value < 4.0) return "HIGH";
+                    if (value < 5.0) return "MEDIUM";
+                    return "LOW";
+                    
+                case "Temperature":
+                    if (value > 35) return "CRITICAL";
+                    if (value > 32) return "HIGH";
+                    if (value > 30) return "MEDIUM";
+                    return "LOW";
 
                 default:
                     return "MEDIUM";

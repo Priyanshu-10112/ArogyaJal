@@ -241,6 +241,378 @@ def model_info():
             'message': str(e)
         }), 500
 
+# ============================================================================
+# NEW ML ENDPOINTS FOR OUTBREAK PREDICTION AND CLUSTERING
+# ============================================================================
+
+@app.route('/api/ml/cluster', methods=['POST'])
+def cluster_symptoms():
+    """
+    Cluster symptom reports using DBSCAN.
+    
+    Expected JSON format:
+    {
+        "reports": [
+            {
+                "id": "report_1",
+                "location": "Village A",
+                "symptoms": ["fever", "diarrhea"],
+                "severity": "MODERATE",
+                "reportDate": "2024-01-15T10:00:00",
+                "geoLocation": {"latitude": 28.6139, "longitude": 77.2090}
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        data = request.json
+        reports = data.get('reports', [])
+        
+        if not reports:
+            return jsonify({'error': 'No reports provided'}), 400
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(reports)
+        
+        # Perform clustering
+        clusters = perform_symptom_clustering(df)
+        
+        return jsonify({
+            'status': 'success',
+            'clusters': clusters,
+            'cluster_count': len(clusters)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Clustering error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ml/predict-outbreak', methods=['POST'])
+def predict_outbreak():
+    """
+    Predict outbreak probability based on clusters and water quality.
+    
+    Expected JSON format:
+    {
+        "clusters": [...],
+        "water_tests": [...],
+        "reports": [...]
+    }
+    """
+    try:
+        data = request.json
+        
+        # Extract features
+        features = extract_outbreak_features(data)
+        
+        # Make prediction
+        prediction = predict_outbreak_probability(features)
+        
+        return jsonify({
+            'status': 'success',
+            'risk_score': float(prediction['risk_score']),
+            'risk_level': prediction['risk_level'],
+            'confidence': float(prediction['confidence']),
+            'contributing_factors': prediction['factors']
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Outbreak prediction error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ml/assess-risk', methods=['POST'])
+def assess_risk():
+    """
+    Assess comprehensive health risk for a location.
+    
+    Expected JSON format:
+    {
+        "reports": [...],
+        "clusters": [...],
+        "water_tests": [...]
+    }
+    """
+    try:
+        data = request.json
+        
+        # Calculate risk components
+        risk_assessment = calculate_location_risk(data)
+        
+        return jsonify({
+            'status': 'success',
+            'overall_risk_score': risk_assessment['overall_risk'],
+            'risk_category': risk_assessment['category'],
+            'component_scores': risk_assessment['components'],
+            'recommendations': risk_assessment['recommendations']
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Risk assessment error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# ============================================================================
+# HELPER FUNCTIONS FOR ML ENDPOINTS
+# ============================================================================
+
+def perform_symptom_clustering(df):
+    """Perform DBSCAN clustering on symptom reports."""
+    from sklearn.cluster import DBSCAN
+    from sklearn.preprocessing import StandardScaler
+    
+    features = []
+    cluster_data = []
+    
+    for idx, row in df.iterrows():
+        if 'geoLocation' in row and row['geoLocation']:
+            lat = row['geoLocation'].get('latitude', 0)
+            lon = row['geoLocation'].get('longitude', 0)
+            
+            # Convert timestamp to hours since epoch
+            timestamp = pd.to_datetime(row.get('reportDate', '2024-01-01'))
+            hours = timestamp.timestamp() / 3600
+            
+            features.append([lat, lon, hours])
+            cluster_data.append({
+                'id': row.get('id', f'report_{idx}'),
+                'location': row.get('location', 'Unknown'),
+                'symptoms': row.get('symptoms', []),
+                'severity': row.get('severity', 'MILD'),
+                'lat': lat,
+                'lon': lon,
+                'timestamp': hours
+            })
+    
+    if len(features) < 3:
+        return []
+    
+    # Normalize features
+    scaler = StandardScaler()
+    features_scaled = scaler.fit_transform(features)
+    
+    # Perform DBSCAN clustering (eps=0.1 for ~5km radius, min_samples=3)
+    dbscan = DBSCAN(eps=0.1, min_samples=3)
+    cluster_labels = dbscan.fit_predict(features_scaled)
+    
+    # Group reports by cluster
+    clusters = {}
+    for i, label in enumerate(cluster_labels):
+        if label != -1:  # Ignore noise points
+            if label not in clusters:
+                clusters[label] = {
+                    'cluster_id': f'cluster_{label}',
+                    'reports': [],
+                    'centroid': {'lat': 0, 'lon': 0},
+                    'report_count': 0
+                }
+            clusters[label]['reports'].append(cluster_data[i])
+    
+    # Calculate cluster properties
+    result_clusters = []
+    for cluster_id, cluster in clusters.items():
+        reports = cluster['reports']
+        cluster['report_count'] = len(reports)
+        
+        # Calculate centroid
+        avg_lat = sum(r['lat'] for r in reports) / len(reports)
+        avg_lon = sum(r['lon'] for r in reports) / len(reports)
+        cluster['centroid'] = {'lat': avg_lat, 'lon': avg_lon}
+        
+        # Analyze symptoms
+        all_symptoms = []
+        for r in reports:
+            all_symptoms.extend(r['symptoms'])
+        
+        symptom_counts = {}
+        for symptom in all_symptoms:
+            symptom_counts[symptom] = symptom_counts.get(symptom, 0) + 1
+        
+        cluster['dominant_symptoms'] = sorted(
+            symptom_counts.items(), 
+            key=lambda x: x[1], 
+            reverse=True
+        )[:3]
+        
+        # Calculate cluster score
+        cluster['cluster_score'] = min(len(reports) * 15 + len(symptom_counts) * 5, 100)
+        
+        result_clusters.append(cluster)
+    
+    return result_clusters
+
+def extract_outbreak_features(data):
+    """Extract features for outbreak prediction."""
+    features = {
+        'cluster_count': len(data.get('clusters', [])),
+        'total_reports': sum(c.get('report_count', 0) for c in data.get('clusters', [])),
+        'avg_cluster_score': 0,
+        'water_quality_score': 0,
+        'temporal_trend': 0
+    }
+    
+    # Calculate average cluster score
+    clusters = data.get('clusters', [])
+    if clusters:
+        features['avg_cluster_score'] = sum(c.get('cluster_score', 0) for c in clusters) / len(clusters)
+    
+    # Water quality factor
+    water_tests = data.get('water_tests', [])
+    if water_tests:
+        unsafe_count = sum(1 for t in water_tests 
+                          if t.get('quality_status') in ['UNSAFE', 'CONTAMINATED'])
+        features['water_quality_score'] = (unsafe_count / len(water_tests)) * 100
+    
+    return features
+
+def predict_outbreak_probability(features):
+    """Predict outbreak probability based on features."""
+    risk_score = 0
+    
+    # Cluster factor (0-40 points)
+    risk_score += min(features['cluster_count'] * 10, 40)
+    
+    # Report count factor (0-30 points)
+    risk_score += min(features['total_reports'] * 2, 30)
+    
+    # Cluster quality factor (0-20 points)
+    risk_score += min(features['avg_cluster_score'] * 0.2, 20)
+    
+    # Water quality factor (0-10 points)
+    risk_score += min(features['water_quality_score'] * 0.1, 10)
+    
+    # Determine risk level
+    if risk_score >= 80:
+        risk_level = 'CRITICAL'
+    elif risk_score >= 60:
+        risk_level = 'HIGH'
+    elif risk_score >= 40:
+        risk_level = 'MEDIUM'
+    else:
+        risk_level = 'LOW'
+    
+    # Calculate confidence
+    confidence = min(50 + features['cluster_count'] * 10 + (features['total_reports'] * 2), 95)
+    
+    return {
+        'risk_score': risk_score,
+        'risk_level': risk_level,
+        'confidence': confidence,
+        'factors': {
+            'cluster_factor': min(features['cluster_count'] * 10, 40),
+            'report_factor': min(features['total_reports'] * 2, 30),
+            'quality_factor': min(features['avg_cluster_score'] * 0.2, 20),
+            'water_factor': min(features['water_quality_score'] * 0.1, 10)
+        }
+    }
+
+def calculate_location_risk(data):
+    """Calculate comprehensive risk assessment for a location."""
+    reports = data.get('reports', [])
+    clusters = data.get('clusters', [])
+    water_tests = data.get('water_tests', [])
+    
+    # Calculate component risks
+    symptom_risk = calculate_symptom_risk(reports)
+    cluster_risk = calculate_cluster_risk(clusters)
+    water_risk = calculate_water_risk(water_tests)
+    
+    # Overall risk (weighted average)
+    overall_risk = (symptom_risk * 0.4 + cluster_risk * 0.4 + water_risk * 0.2)
+    
+    # Determine category
+    if overall_risk >= 75:
+        category = 'CRITICAL'
+    elif overall_risk >= 60:
+        category = 'HIGH'
+    elif overall_risk >= 40:
+        category = 'MEDIUM'
+    elif overall_risk >= 20:
+        category = 'LOW'
+    else:
+        category = 'MINIMAL'
+    
+    # Generate recommendations
+    recommendations = generate_recommendations(category, symptom_risk, cluster_risk, water_risk)
+    
+    return {
+        'overall_risk': overall_risk,
+        'category': category,
+        'components': {
+            'symptom_risk': symptom_risk,
+            'cluster_risk': cluster_risk,
+            'water_risk': water_risk
+        },
+        'recommendations': recommendations
+    }
+
+def calculate_symptom_risk(reports):
+    """Calculate risk from symptom reports."""
+    if not reports:
+        return 0
+    
+    risk = 0
+    severe_count = sum(1 for r in reports if r.get('severity') in ['SEVERE', 'CRITICAL'])
+    risk += (severe_count / len(reports)) * 50
+    risk += min(len(reports) * 2, 50)
+    
+    return min(risk, 100)
+
+def calculate_cluster_risk(clusters):
+    """Calculate risk from clusters."""
+    if not clusters:
+        return 0
+    
+    avg_score = sum(c.get('cluster_score', 0) for c in clusters) / len(clusters)
+    cluster_factor = min(len(clusters) * 20, 40)
+    
+    return min(avg_score * 0.6 + cluster_factor, 100)
+
+def calculate_water_risk(water_tests):
+    """Calculate risk from water quality."""
+    if not water_tests:
+        return 50  # Assume moderate risk if no data
+    
+    unsafe_count = sum(1 for t in water_tests 
+                      if t.get('quality_status') in ['UNSAFE', 'CONTAMINATED'])
+    
+    return (unsafe_count / len(water_tests)) * 100
+
+def generate_recommendations(category, symptom_risk, cluster_risk, water_risk):
+    """Generate recommendations based on risk assessment."""
+    recommendations = []
+    
+    if category == 'CRITICAL':
+        recommendations.extend([
+            'Immediate intervention required',
+            'Deploy emergency medical teams',
+            'Activate outbreak response protocol'
+        ])
+    elif category == 'HIGH':
+        recommendations.extend([
+            'Increase surveillance and monitoring',
+            'Prepare emergency response resources',
+            'Issue health advisory to community'
+        ])
+    elif category == 'MEDIUM':
+        recommendations.extend([
+            'Continue monitoring situation',
+            'Increase testing frequency',
+            'Conduct preventive health education'
+        ])
+    else:
+        recommendations.append('Continue routine surveillance')
+    
+    if water_risk > 60:
+        recommendations.append('PRIORITY: Address water quality issues')
+    
+    if cluster_risk > 70:
+        recommendations.append('PRIORITY: Investigate active clusters')
+    
+    if symptom_risk > 70:
+        recommendations.append('PRIORITY: Increase medical support')
+    
+    return recommendations
+
 if __name__ == '__main__':
     # Run the Flask app
     port = int(os.environ.get('PORT', 5000))

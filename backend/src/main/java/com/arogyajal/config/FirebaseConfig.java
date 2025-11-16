@@ -1,9 +1,11 @@
 package com.arogyajal.config;
 
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.firestore.Firestore;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.cloud.FirestoreClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,12 +58,27 @@ public class FirebaseConfig {
         }
     }
     
-    @Bean
+    @Bean(destroyMethod = "")
     public FirebaseAuth firebaseAuth() {
         try {
             return FirebaseAuth.getInstance();
         } catch (Exception e) {
             log.warn("FirebaseAuth not available - this is expected in test environments: {}", e.getMessage());
+            return null;
+        }
+    }
+    
+    @Bean(destroyMethod = "")
+    public Firestore firestore() {
+        try {
+            Firestore firestore = FirestoreClient.getFirestore();
+            log.info("Firestore bean created successfully");
+            return firestore;
+        } catch (Exception e) {
+            log.error("Failed to create Firestore bean: {}", e.getMessage());
+            if (!isTestEnvironment()) {
+                throw new RuntimeException("Firestore initialization failed. Ensure Firebase is properly initialized.", e);
+            }
             return null;
         }
     }

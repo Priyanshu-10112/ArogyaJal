@@ -10,7 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.format.annotation.DateTimeFormat;
+//import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.LocalDateTime;
+import com.google.cloud.Timestamp;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,12 +46,17 @@ public class SymptomController {
     public ResponseEntity<SymptomReport> createSymptomReport(@Valid @RequestBody SymptomRequest request) {
         log.info("Creating symptom report for user: {}", request.getUserId());
         
-        SymptomReport report = symptomService.saveSymptomReport(request);
-        
-        // Check for symptom cluster alerts after saving the report
-        alertService.checkForSymptomClusterAlerts(request.getLocation());
-        
-        return ResponseEntity.status(HttpStatus.CREATED).body(report);
+        try {
+            SymptomReport report = symptomService.saveSymptomReport(request);
+            
+            // TODO: Check for symptom cluster alerts after saving the report
+            // alertService.checkForSymptomClusterAlerts(request.getLocation());
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(report);
+        } catch (Exception e) {
+            log.error("Error creating symptom report", e);
+            throw e;
+        }
     }
     
     @GetMapping("/reports")
@@ -116,8 +121,10 @@ public class SymptomController {
     @GetMapping("/reports/time-range")
     @Operation(summary = "Get reports by time range", description = "Retrieve reports within a specific time range")
     public ResponseEntity<List<SymptomReport>> getReportsByTimeRange(
-            @Parameter(description = "Start time") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @Parameter(description = "End time") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+            @Parameter(description = "Start time (seconds since epoch)") @RequestParam long startSeconds,
+            @Parameter(description = "End time (seconds since epoch)") @RequestParam long endSeconds) {
+        Timestamp start = Timestamp.ofTimeSecondsAndNanos(startSeconds, 0);
+        Timestamp end = Timestamp.ofTimeSecondsAndNanos(endSeconds, 0);
         log.info("Retrieving reports between {} and {}", start, end);
         
         List<SymptomReport> reports = symptomService.getReportsByTimeRange(start, end);
@@ -128,8 +135,10 @@ public class SymptomController {
     @Operation(summary = "Get reports by location and time range", description = "Retrieve reports for a location within a specific time range")
     public ResponseEntity<List<SymptomReport>> getReportsByLocationAndTimeRange(
             @Parameter(description = "Location name") @PathVariable String location,
-            @Parameter(description = "Start time") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @Parameter(description = "End time") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
+            @Parameter(description = "Start time (seconds since epoch)") @RequestParam long startSeconds,
+            @Parameter(description = "End time (seconds since epoch)") @RequestParam long endSeconds) {
+        Timestamp start = Timestamp.ofTimeSecondsAndNanos(startSeconds, 0);
+        Timestamp end = Timestamp.ofTimeSecondsAndNanos(endSeconds, 0);
         log.info("Retrieving reports for location {} between {} and {}", location, start, end);
         
         List<SymptomReport> reports = symptomService.getReportsByLocationAndTimeRange(location, start, end);
@@ -163,7 +172,8 @@ public class SymptomController {
             @Parameter(description = "Hours to look back") @RequestParam(defaultValue = "24") int hours) {
         log.info("Retrieving high severity reports from last {} hours", hours);
         
-        LocalDateTime since = LocalDateTime.now().minusHours(hours);
+        Timestamp since = Timestamp.ofTimeSecondsAndNanos(
+            Timestamp.now().getSeconds() - (hours * 3600), 0);
         List<SymptomReport> reports = symptomService.getHighSeverityRecentReports(since);
         return ResponseEntity.ok(reports);
     }

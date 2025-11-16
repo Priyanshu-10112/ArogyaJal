@@ -3,11 +3,11 @@ package com.arogyajal.service;
 import com.arogyajal.dto.SymptomRequest;
 import com.arogyajal.model.SymptomReport;
 import com.arogyajal.repository.SymptomRepository;
+import com.google.cloud.Timestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -28,21 +28,41 @@ public class SymptomService {
             // Generate a new ID for the report
             String reportId = UUID.randomUUID().toString();
             
+            // Convert geoLocation map to GeoPoint if provided
+            com.google.cloud.firestore.GeoPoint geoPoint = null;
+            if (request.getGeoLocation() != null && 
+                request.getGeoLocation().containsKey("latitude") && 
+                request.getGeoLocation().containsKey("longitude")) {
+                double lat = request.getGeoLocation().get("latitude");
+                double lon = request.getGeoLocation().get("longitude");
+                geoPoint = new com.google.cloud.firestore.GeoPoint(lat, lon);
+            }
+            
             SymptomReport report = SymptomReport.builder()
                     .id(reportId)
                     .userId(request.getUserId())
                     .location(request.getLocation())
+                    .geoLocation(geoPoint)
                     .waterSource(request.getWaterSource())
+                    .reporterType(request.getReporterType())
+                    .reporterId(request.getReporterId())
+                    .patientAge(request.getPatientAge())
+                    .patientGender(request.getPatientGender())
                     .symptoms(request.getSymptoms())
                     .severity(request.getSeverity())
                     .duration(request.getDuration())
                     .waterConsumption(request.getWaterConsumption())
-                    .lastWaterConsumption(LocalDateTime.now())
+                    .lastWaterConsumption(com.google.cloud.Timestamp.now())
                     .additionalNotes(request.getAdditionalNotes())
                     .contactInfo(request.getContactInfo())
-                    .reportedAt(LocalDateTime.now())
+                    .reportedAt(com.google.cloud.Timestamp.now())
                     .status("PENDING")
+                    .syncStatus("SYNCED")
                     .build();
+            
+            // Set patient name and phone separately (not in builder)
+            report.setPatientName(request.getPatientName());
+            report.setPatientPhone(request.getPatientPhone());
             
             return symptomRepository.save(report);
         } catch (Exception e) {
@@ -81,12 +101,12 @@ public class SymptomService {
         return symptomRepository.findBySeverityOrderByReportedAtDesc(severity);
     }
     
-    public List<SymptomReport> getReportsByTimeRange(LocalDateTime start, LocalDateTime end) {
+    public List<SymptomReport> getReportsByTimeRange(Timestamp start, Timestamp end) {
         log.info("Retrieving reports between {} and {}", start, end);
         return symptomRepository.findByReportedAtBetweenOrderByReportedAtDesc(start, end);
     }
     
-    public List<SymptomReport> getReportsByLocationAndTimeRange(String location, LocalDateTime start, LocalDateTime end) {
+    public List<SymptomReport> getReportsByLocationAndTimeRange(String location, Timestamp start, Timestamp end) {
         log.info("Retrieving reports for location {} between {} and {}", location, start, end);
         return symptomRepository.findByLocationAndReportedAtBetweenOrderByReportedAtDesc(location, start, end);
     }
@@ -122,7 +142,7 @@ public class SymptomService {
         }
     }
     
-    public List<SymptomReport> getHighSeverityRecentReports(LocalDateTime since) {
+    public List<SymptomReport> getHighSeverityRecentReports(Timestamp since) {
         log.info("Retrieving high severity reports since: {}", since);
         return symptomRepository.findHighSeverityRecentReports(since);
     }
@@ -135,7 +155,7 @@ public class SymptomService {
             SymptomReport report = reportOpt.get();
             report.setStatus(status);
             report.setInvestigationNotes(investigationNotes);
-            report.setInvestigatedAt(LocalDateTime.now());
+            report.setInvestigatedAt(com.google.cloud.Timestamp.now());
             return symptomRepository.save(report);
         }
         throw new RuntimeException("Symptom report not found with ID: " + id);

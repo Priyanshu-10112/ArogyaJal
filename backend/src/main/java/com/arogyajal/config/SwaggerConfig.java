@@ -18,7 +18,7 @@ public class SwaggerConfig {
     private String serverPort;
     
     @Bean
-    public OpenAPI customOpenAPI() {
+    OpenAPI customOpenAPI() {
         return new OpenAPI()
                 .info(new Info()
                         .title("Arogyajal Backend API")

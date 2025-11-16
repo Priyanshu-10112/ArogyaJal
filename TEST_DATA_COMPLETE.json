@@ -1,0 +1,276 @@
+{
+  "sensors": [
+    {
+      "deviceId": "SENSOR_001",
+      "location": "Village Rampur",
+      "latitude": 28.6139,
+      "longitude": 77.2090,
+      "ph": 7.2,
+      "temperature": 25.5,
+      "turbidity": 2.1,
+      "dissolvedOxygen": 7.8,
+      "conductivity": 450.0,
+      "tds": 350.0
+    },
+    {
+      "deviceId": "SENSOR_002",
+      "location": "Village Rampur",
+      "latitude": 28.6145,
+      "longitude": 77.2095,
+      "ph": 6.8,
+      "temperature": 26.0,
+      "turbidity": 3.5,
+      "dissolvedOxygen": 6.5,
+      "conductivity": 520.0,
+      "tds": 420.0
+    },
+    {
+      "deviceId": "SENSOR_003",
+      "location": "Village Shyampur",
+      "latitude": 28.6200,
+      "longitude": 77.2150,
+      "ph": 7.5,
+      "temperature": 24.8,
+      "turbidity": 1.8,
+      "dissolvedOxygen": 8.2,
+      "conductivity": 380.0,
+      "tds": 290.0
+    },
+    {
+      "deviceId": "SENSOR_004",
+      "location": "Village Shyampur",
+      "latitude": 28.6210,
+      "longitude": 77.2160,
+      "ph": 5.5,
+      "temperature": 27.5,
+      "turbidity": 8.5,
+      "dissolvedOxygen": 4.2,
+      "conductivity": 780.0,
+      "tds": 650.0
+    },
+    {
+      "deviceId": "SENSOR_005",
+      "location": "Village Karimpur",
+      "latitude": 28.6300,
+      "longitude": 77.2250,
+      "ph": 7.0,
+      "temperature": 25.0,
+      "turbidity": 2.5,
+      "dissolvedOxygen": 7.5,
+      "conductivity": 420.0,
+      "tds": 340.0
+    }
+  ],
+  "symptoms": [
+    {
+      "userId": "USER_001",
+      "location": "Village Rampur",
+      "geoLocation": {
+        "latitude": 28.6139,
+        "longitude": 77.2090
+      },
+      "waterSource": "TAP",
+      "reporterType": "ASHA",
+      "reporterId": "ASHA_001",
+      "patientName": "Rajesh Kumar",
+      "patientPhone": "+91-9876543210",
+      "patientAge": 35,
+      "patientGender": "MALE",
+      "symptoms": ["DIARRHEA", "NAUSEA", "STOMACH_ACHE"],
+      "severity": "MODERATE",
+      "duration": "DAYS",
+      "waterConsumption": 3,
+      "additionalNotes": "Patient reports symptoms started 2 days ago after drinking tap water",
+      "contactInfo": "Contact via phone"
+    },
+    {
+      "userId": "USER_002",
+      "location": "Village Rampur",
+      "geoLocation": {
+        "latitude": 28.6142,
+        "longitude": 77.2092
+      },
+      "waterSource": "TAP",
+      "reporterType": "ASHA",
+      "reporterId": "ASHA_001",
+      "patientName": "Sunita Devi",
+      "patientPhone": "+91-9876543211",
+      "patientAge": 28,
+      "patientGender": "FEMALE",
+      "symptoms": ["DIARRHEA", "VOMITING", "FEVER"],
+      "severity": "SEVERE",
+      "duration": "DAYS",
+      "waterConsumption": 2,
+      "additionalNotes": "Severe dehydration, needs immediate attention",
+      "contactInfo": "Emergency contact"
+    },
+    {
+      "userId": "USER_003",
+      "location": "Village Rampur",
+      "geoLocation": {
+        "latitude": 28.6140,
+        "longitude": 77.2088
+      },
+      "waterSource": "TAP",
+      "reporterType": "VILLAGER",
+      "reporterId": "SELF",
+      "patientName": "Amit Singh",
+      "patientPhone": "+91-9876543212",
+      "patientAge": 42,
+      "patientGender": "MALE",
+      "symptoms": ["STOMACH_ACHE", "NAUSEA"],
+      "severity": "MILD",
+      "duration": "HOURS",
+      "waterConsumption": 4,
+      "additionalNotes": "Mild symptoms, monitoring",
+      "contactInfo": "Self report"
+    },
+    {
+      "userId": "USER_004",
+      "location": "Village Shyampur",
+      "geoLocation": {
+        "latitude": 28.6205,
+        "longitude": 77.2155
+      },
+      "waterSource": "WELL",
+      "reporterType": "ASHA",
+      "reporterId": "ASHA_002",
+      "patientName": "Geeta Sharma",
+      "patientPhone": "+91-9876543213",
+      "patientAge": 32,
+      "patientGender": "FEMALE",
+      "symptoms": ["DIARRHEA", "STOMACH_ACHE"],
+      "severity": "MODERATE",
+      "duration": "DAYS",
+      "waterConsumption": 3,
+      "additionalNotes": "Using well water, possible contamination",
+      "contactInfo": "ASHA worker contact"
+    },
+    {
+      "userId": "USER_005",
+      "location": "Village Shyampur",
+      "geoLocation": {
+        "latitude": 28.6208,
+        "longitude": 77.2158
+      },
+      "waterSource": "WELL",
+      "reporterType": "CLINIC",
+      "reporterId": "CLINIC_001",
+      "patientName": "Ramesh Yadav",
+      "patientPhone": "+91-9876543214",
+      "patientAge": 55,
+      "patientGender": "MALE",
+      "symptoms": ["DIARRHEA", "VOMITING", "FEVER", "WEAKNESS"],
+      "severity": "SEVERE",
+      "duration": "WEEKS",
+      "waterConsumption": 2,
+      "additionalNotes": "Chronic case, hospitalized",
+      "contactInfo": "Clinic: 0123-456789"
+    },
+    {
+      "userId": "USER_006",
+      "location": "Village Karimpur",
+      "geoLocation": {
+        "latitude": 28.6300,
+        "longitude": 77.2250
+      },
+      "waterSource": "TAP",
+      "reporterType": "VILLAGER",
+      "reporterId": "SELF",
+      "patientName": "Priya Verma",
+      "patientPhone": "+91-9876543215",
+      "patientAge": 25,
+      "patientGender": "FEMALE",
+      "symptoms": ["HEADACHE", "NAUSEA"],
+      "severity": "MILD",
+      "duration": "HOURS",
+      "waterConsumption": 3,
+      "additionalNotes": "Mild symptoms, no treatment needed",
+      "contactInfo": "Self report"
+    },
+    {
+      "userId": "USER_007",
+      "location": "Village Rampur",
+      "geoLocation": {
+        "latitude": 28.6138,
+        "longitude": 77.2091
+      },
+      "waterSource": "TAP",
+      "reporterType": "ASHA",
+      "reporterId": "ASHA_001",
+      "patientName": "Mohan Lal",
+      "patientPhone": "+91-9876543216",
+      "patientAge": 48,
+      "patientGender": "MALE",
+      "symptoms": ["DIARRHEA", "STOMACH_ACHE", "FEVER"],
+      "severity": "MODERATE",
+      "duration": "DAYS",
+      "waterConsumption": 3,
+      "additionalNotes": "Part of cluster in Rampur",
+      "contactInfo": "ASHA worker"
+    },
+    {
+      "userId": "USER_008",
+      "location": "Village Rampur",
+      "geoLocation": {
+        "latitude": 28.6141,
+        "longitude": 77.2089
+      },
+      "waterSource": "TAP",
+      "reporterType": "ASHA",
+      "reporterId": "ASHA_001",
+      "patientName": "Kamla Devi",
+      "patientPhone": "+91-9876543217",
+      "patientAge": 38,
+      "patientGender": "FEMALE",
+      "symptoms": ["VOMITING", "DIARRHEA", "WEAKNESS"],
+      "severity": "MODERATE",
+      "duration": "DAYS",
+      "waterConsumption": 2,
+      "additionalNotes": "Cluster case, same water source",
+      "contactInfo": "ASHA worker"
+    },
+    {
+      "userId": "USER_009",
+      "location": "Village Shyampur",
+      "geoLocation": {
+        "latitude": 28.6212,
+        "longitude": 77.2162
+      },
+      "waterSource": "WELL",
+      "reporterType": "ASHA",
+      "reporterId": "ASHA_002",
+      "patientName": "Suresh Patel",
+      "patientPhone": "+91-9876543218",
+      "patientAge": 45,
+      "patientGender": "MALE",
+      "symptoms": ["DIARRHEA", "STOMACH_ACHE"],
+      "severity": "MODERATE",
+      "duration": "DAYS",
+      "waterConsumption": 4,
+      "additionalNotes": "Well water contamination suspected",
+      "contactInfo": "ASHA worker"
+    },
+    {
+      "userId": "USER_010",
+      "location": "Village Karimpur",
+      "geoLocation": {
+        "latitude": 28.6305,
+        "longitude": 77.2255
+      },
+      "waterSource": "BOTTLED",
+      "reporterType": "VILLAGER",
+      "reporterId": "SELF",
+      "patientName": "Anita Gupta",
+      "patientPhone": "+91-9876543219",
+      "patientAge": 30,
+      "patientGender": "FEMALE",
+      "symptoms": ["HEADACHE"],
+      "severity": "MILD",
+      "duration": "HOURS",
+      "waterConsumption": 2,
+      "additionalNotes": "Using bottled water, isolated case",
+      "contactInfo": "Self report"
+    }
+  ]
+}

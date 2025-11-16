@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+//import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
@@ -97,7 +97,17 @@ public class AlertService {
         log.info("Retrieving active alerts");
         try {
             return alertRepository.findByStatus("ACTIVE");
-        } catch (ExecutionException | InterruptedException e) {
+        } catch (ExecutionException e) {
+            // Check if it's a Firestore index error
+            if (e.getCause() != null && e.getCause().getMessage() != null 
+                && e.getCause().getMessage().contains("requires an index")) {
+                log.warn("Firestore index not created for active alerts query. Returning empty list.");
+                log.warn("Create index at: https://console.firebase.google.com/project/arogyajal-40ddd/firestore/indexes");
+                return Collections.emptyList();
+            }
+            log.error("Error retrieving active alerts", e);
+            return Collections.emptyList();
+        } catch (InterruptedException e) {
             log.error("Error retrieving active alerts", e);
             Thread.currentThread().interrupt(); // Restore the interrupted status
             return Collections.emptyList();
@@ -193,15 +203,15 @@ public class AlertService {
         com.google.cloud.Timestamp now = com.google.cloud.Timestamp.now();
         com.google.cloud.Timestamp last24Hours = com.google.cloud.Timestamp.ofTimeSecondsAndNanos(
             now.getSeconds() - (24 * 3600), 0);
-        // Note: This query needs to be updated to use Timestamp instead of LocalDateTime
-        // For now, commenting out to avoid compilation errors
-        /*
+        
+        // FIXED: Now using Timestamp instead of LocalDateTime
         List<SymptomReport> recentReports = symptomRepository
                 .findByLocationAndReportedAtBetweenOrderByReportedAtDesc(location, last24Hours, now);
+        
         if (recentReports.size() >= 5) {
+            log.info("Symptom cluster detected in {}: {} reports in last 24 hours", location, recentReports.size());
             createSymptomClusterAlert(location, recentReports);
         }
-        */
     }
 
     private Alert createWaterQualityAlert(SensorReading reading, String parameter, double value) {

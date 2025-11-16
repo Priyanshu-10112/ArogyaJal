@@ -1,5 +1,6 @@
 package com.arogyajal.dto;
 
+import com.google.cloud.firestore.GeoPoint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -8,6 +9,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Pattern;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 public class SymptomRequest {
@@ -18,8 +20,21 @@ public class SymptomRequest {
     @NotBlank(message = "Location is required")
     private String location;
     
+    // GeoLocation (optional but recommended)
+    private Map<String, Double> geoLocation; // {latitude: 28.6139, longitude: 77.2090}
+    
     @NotBlank(message = "Water source is required")
     private String waterSource;
+    
+    // Reporter information (optional)
+    private String reporterType; // ASHA, VILLAGER, CLINIC
+    private String reporterId;
+    
+    // Patient information (optional)
+    private String patientName; // Patient's name
+    private String patientPhone; // Patient's phone number
+    private Integer patientAge;
+    private String patientGender; // MALE, FEMALE, OTHER
     
     @NotEmpty(message = "At least one symptom must be reported")
     private List<String> symptoms;
@@ -39,7 +54,6 @@ public class SymptomRequest {
     
     private String additionalNotes;
     
-    @Pattern(regexp = "^[\\w-\\.]+@([\\w-]+\\.)+[\\w-]{2,4}$", message = "Invalid email format")
     private String contactInfo;
 
     public SymptomRequest() {
@@ -130,6 +144,62 @@ public class SymptomRequest {
 
     public void setContactInfo(String contactInfo) {
         this.contactInfo = contactInfo;
+    }
+
+    public Map<String, Double> getGeoLocation() {
+        return geoLocation;
+    }
+
+    public void setGeoLocation(Map<String, Double> geoLocation) {
+        this.geoLocation = geoLocation;
+    }
+
+    public String getReporterType() {
+        return reporterType;
+    }
+
+    public void setReporterType(String reporterType) {
+        this.reporterType = reporterType;
+    }
+
+    public String getReporterId() {
+        return reporterId;
+    }
+
+    public void setReporterId(String reporterId) {
+        this.reporterId = reporterId;
+    }
+
+    public Integer getPatientAge() {
+        return patientAge;
+    }
+
+    public void setPatientAge(Integer patientAge) {
+        this.patientAge = patientAge;
+    }
+
+    public String getPatientGender() {
+        return patientGender;
+    }
+
+    public void setPatientGender(String patientGender) {
+        this.patientGender = patientGender;
+    }
+
+    public String getPatientName() {
+        return patientName;
+    }
+
+    public void setPatientName(String patientName) {
+        this.patientName = patientName;
+    }
+
+    public String getPatientPhone() {
+        return patientPhone;
+    }
+
+    public void setPatientPhone(String patientPhone) {
+        this.patientPhone = patientPhone;
     }
 
     // equals and hashCode

@@ -6,7 +6,7 @@ import com.google.cloud.firestore.*;
 import com.google.firebase.cloud.FirestoreClient;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import com.google.cloud.Timestamp;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
@@ -142,7 +142,7 @@ public class SymptomRepository {
     }
     
     // Find reports within time range
-    public List<SymptomReport> findByReportedAtBetweenOrderByReportedAtDesc(LocalDateTime start, LocalDateTime end) {
+    public List<SymptomReport> findByReportedAtBetweenOrderByReportedAtDesc(Timestamp start, Timestamp end) {
         try {
             ApiFuture<QuerySnapshot> future = db.collection(COLLECTION_NAME)
                     .whereGreaterThanOrEqualTo("reportedAt", start)
@@ -157,7 +157,7 @@ public class SymptomRepository {
     
     // Find reports by location and time range
     public List<SymptomReport> findByLocationAndReportedAtBetweenOrderByReportedAtDesc(
-            String location, LocalDateTime start, LocalDateTime end) {
+            String location, Timestamp start, Timestamp end) {
         try {
             ApiFuture<QuerySnapshot> future = db.collection(COLLECTION_NAME)
                     .whereEqualTo("location", location)
@@ -249,7 +249,7 @@ public class SymptomRepository {
     }
     
     // Find reports with high severity and recent timestamp
-    public List<SymptomReport> findHighSeverityRecentReports(LocalDateTime date) {
+    public List<SymptomReport> findHighSeverityRecentReports(Timestamp date) {
         try {
             ApiFuture<QuerySnapshot> future = db.collection(COLLECTION_NAME)
                     .whereEqualTo("severity", "HIGH")

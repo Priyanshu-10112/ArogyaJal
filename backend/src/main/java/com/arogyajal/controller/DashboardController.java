@@ -164,7 +164,8 @@ public class DashboardController {
         long resolvedReports = symptomService.getReportCountByStatus("RESOLVED");
         
         // Get recent high severity reports
-        LocalDateTime last24Hours = LocalDateTime.now().minusHours(24);
+        Timestamp last24Hours = Timestamp.ofTimeSecondsAndNanos(
+            Timestamp.now().getSeconds() - (24 * 3600), 0);
         List<SymptomReport> recentHighSeverity = symptomService.getHighSeverityRecentReports(last24Hours);
         
         SymptomsSummaryResponse response = new SymptomsSummaryResponse();
@@ -206,7 +207,7 @@ public class DashboardController {
                 Double value = getParameterValue(reading, param);
                 if (value != null) {
                     dataPoints.add(DashboardResponse.DataPoint.builder()
-                            .timestamp(TimestampToLocalDateTime(reading.getTimestamp()))
+                            .timestamp(timestampToLocalDateTime(reading.getTimestamp()))
                             .value(value)
                             .build());
                     latestValue = value;
@@ -309,7 +310,7 @@ public class DashboardController {
         }
     }
     
-    private LocalDateTime TimestampToLocalDateTime(Timestamp timestamp) {
+    private LocalDateTime timestampToLocalDateTime(Timestamp timestamp) {
         if (timestamp == null) return null;
         return LocalDateTime.ofEpochSecond(
             timestamp.getSeconds(),
@@ -392,5 +393,64 @@ public class DashboardController {
     public static class LocationsSummaryResponse {
         public List<DashboardResponse.LocationSummary> locations;
         public int totalLocations;
+    }
+    
+    /**
+     * Get dashboard statistics
+     */
+    @GetMapping("/stats")
+    @Operation(summary = "Get dashboard statistics", description = "Get overall system statistics")
+    public ResponseEntity<Map<String, Object>> getDashboardStats() {
+        log.info("getDashboardStats endpoint called");
+        try {
+            Map<String, Object> stats = new HashMap<>();
+            
+            // Get counts with null safety
+            List<SensorReading> allSensors = sensorService.getAllSensorReadings();
+            List<SymptomReport> allReports = symptomService.getAllSymptomReports();
+            List<Alert> allAlerts = alertService.getAllAlerts();
+            
+            log.info("Retrieved {} sensors, {} reports, {} alerts", 
+                allSensors != null ? allSensors.size() : 0,
+                allReports != null ? allReports.size() : 0,
+                allAlerts != null ? allAlerts.size() : 0);
+            
+            stats.put("totalSensors", allSensors != null ? allSensors.size() : 0);
+            stats.put("activeSensors", allSensors != null ? allSensors.stream()
+                .filter(s -> s.getTimestamp() != null)
+                .count() : 0);
+            stats.put("totalReports", allReports != null ? allReports.size() : 0);
+            stats.put("activeClusters", 0); // Will be updated when clusters are implemented
+            stats.put("activeAlerts", allAlerts != null ? allAlerts.stream()
+                .filter(a -> "ACTIVE".equals(a.getStatus()))
+                .count() : 0);
+            
+            log.info("Returning stats: {}", stats);
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            log.error("Error getting dashboard stats", e);
+            Map<String, Object> fallback = new HashMap<>();
+            fallback.put("totalSensors", 0);
+            fallback.put("activeSensors", 0);
+            fallback.put("totalReports", 0);
+            fallback.put("activeClusters", 0);
+            fallback.put("activeAlerts", 0);
+            fallback.put("error", e.getMessage());
+            return ResponseEntity.ok(fallback);
+        }
+    }
+    
+    /**
+     * Health check endpoint for dashboard controller
+     */
+    @GetMapping("/health")
+    @Operation(summary = "Dashboard health check", description = "Check if dashboard controller is working")
+    public ResponseEntity<Map<String, String>> healthCheck() {
+        log.info("Dashboard health check called");
+        Map<String, String> response = new HashMap<>();
+        response.put("status", "OK");
+        response.put("controller", "DashboardController");
+        response.put("timestamp", Timestamp.now().toString());
+        return ResponseEntity.ok(response);
     }
 }

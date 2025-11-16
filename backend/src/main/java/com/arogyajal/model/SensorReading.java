@@ -37,6 +37,13 @@ public class SensorReading {
     private String qualityStatus; // GOOD, WARNING, CRITICAL
     private String notes;
     
+    // Device status (IoT device health)
+    private Integer batteryLevel; // Battery percentage (0-100)
+    private Double batteryVoltage; // Battery voltage (e.g., 3.7V)
+    private Integer signalStrength; // WiFi/Network signal strength in dBm (e.g., -65)
+    private Long uptime; // Device uptime in seconds
+    private Timestamp lastMaintenance; // Last maintenance date
+    
     // Constructors
     public SensorReading() {
     }
@@ -191,6 +198,47 @@ public class SensorReading {
     
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+    
+    // Battery and device status getters/setters
+    public Integer getBatteryLevel() {
+        return batteryLevel;
+    }
+    
+    public void setBatteryLevel(Integer batteryLevel) {
+        this.batteryLevel = batteryLevel;
+    }
+    
+    public Double getBatteryVoltage() {
+        return batteryVoltage;
+    }
+    
+    public void setBatteryVoltage(Double batteryVoltage) {
+        this.batteryVoltage = batteryVoltage;
+    }
+    
+    public Integer getSignalStrength() {
+        return signalStrength;
+    }
+    
+    public void setSignalStrength(Integer signalStrength) {
+        this.signalStrength = signalStrength;
+    }
+    
+    public Long getUptime() {
+        return uptime;
+    }
+    
+    public void setUptime(Long uptime) {
+        this.uptime = uptime;
+    }
+    
+    public Timestamp getLastMaintenance() {
+        return lastMaintenance;
+    }
+    
+    public void setLastMaintenance(Timestamp lastMaintenance) {
+        this.lastMaintenance = lastMaintenance;
     }
     
     @Override

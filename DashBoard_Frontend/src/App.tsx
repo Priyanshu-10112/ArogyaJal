@@ -1,11 +1,12 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faGauge, faChartLine, faBell, faMap } from '@fortawesome/free-solid-svg-icons';
+import { faGauge, faChartLine, faBell, faMap, faBrain } from '@fortawesome/free-solid-svg-icons';
 import AlertsPage from './pages/AlertsPage';
 import Dashboard from './pages/Dashboard';
 import Trends from './pages/Trends';
 import MapPage from './pages/Map';
+import MLDashboard from './pages/MLDashboard';
 import './App.css';
 
 const App: React.FC = () => {
@@ -42,6 +43,10 @@ const App: React.FC = () => {
               <FontAwesomeIcon icon={faMap} className="nav-icon" />
               <span>Map</span>
             </Link>
+            <Link to="/ml-dashboard" className={`nav-link ${isActive('/ml-dashboard') ? 'active' : ''}`}>
+              <FontAwesomeIcon icon={faBrain} className="nav-icon" />
+              <span>ML Dashboard</span>
+            </Link>
           </nav>
         </aside>
 
@@ -52,6 +57,7 @@ const App: React.FC = () => {
             <Route path="/alerts" element={<AlertsPage />} />
             <Route path="/trends" element={<Trends />} />
             <Route path="/map" element={<MapPage />} />
+            <Route path="/ml-dashboard" element={<MLDashboard />} />
           </Routes>
         </main>
       </div>

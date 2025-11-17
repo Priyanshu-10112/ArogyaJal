@@ -19,6 +19,44 @@ public class SensorRepository extends BaseFirestoreRepository<SensorReading> {
         super(COLLECTION_NAME, SensorReading.class);
     }
     
+    @Override
+    protected List<SensorReading> getEntities(ApiFuture<QuerySnapshot> future) throws ExecutionException, InterruptedException {
+        List<SensorReading> list = new ArrayList<>();
+        QuerySnapshot querySnapshot = future.get();
+        for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+            SensorReading reading = fixSensorReading(doc);
+            if (reading != null) {
+                list.add(reading);
+            }
+        }
+        return list;
+    }
+    
+    @Override
+    public Optional<SensorReading> findById(String id) throws ExecutionException, InterruptedException {
+        DocumentReference docRef = db.collection(COLLECTION_NAME).document(id);
+        ApiFuture<DocumentSnapshot> future = docRef.get();
+        DocumentSnapshot document = future.get();
+        if (document.exists()) {
+            return Optional.of(fixSensorReading(document));
+        }
+        return Optional.empty();
+    }
+    
+    private SensorReading fixSensorReading(DocumentSnapshot doc) {
+        SensorReading reading = doc.toObject(SensorReading.class);
+        if (reading != null) {
+            // Manual fix for temperature and turbidity if null
+            if (reading.getTemperature() == null && doc.contains("temperature")) {
+                reading.setTemperature(doc.getDouble("temperature"));
+            }
+            if (reading.getTurbidity() == null && doc.contains("turbidity")) {
+                reading.setTurbidity(doc.getDouble("turbidity"));
+            }
+        }
+        return reading;
+    }
+    
     public List<SensorReading> findBySensorId(String sensorId) throws ExecutionException, InterruptedException {
         return findBySensorIdOrderByTimestampDesc(sensorId);
     }
@@ -35,6 +73,13 @@ public class SensorRepository extends BaseFirestoreRepository<SensorReading> {
                 .map(doc -> {
                     SensorReading reading = doc.toObject(SensorReading.class);
                     reading.setId(doc.getId());
+                    // Manual fix for temperature and turbidity if null
+                    if (reading.getTemperature() == null && doc.contains("temperature")) {
+                        reading.setTemperature(doc.getDouble("temperature"));
+                    }
+                    if (reading.getTurbidity() == null && doc.contains("turbidity")) {
+                        reading.setTurbidity(doc.getDouble("turbidity"));
+                    }
                     return reading;
                 })
                 .collect(Collectors.toList());

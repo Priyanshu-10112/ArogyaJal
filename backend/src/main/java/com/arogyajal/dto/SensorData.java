@@ -187,9 +187,11 @@ public class SensorData {
                     setterVisibility = JsonAutoDetect.Visibility.NONE)
     public static class Sensors {
         @JsonProperty("PH")
+        @com.fasterxml.jackson.annotation.JsonAlias({"pH", "ph"})
         private Double pH;
         
         @JsonProperty("Turbidity_NTU")
+        @com.fasterxml.jackson.annotation.JsonAlias({"turbidity_NTU", "turbidity"})
         private Double turbidity_NTU;
         
         @JsonProperty("TDS_ppm")
@@ -199,6 +201,7 @@ public class SensorData {
         private Double DO_mgL;
         
         @JsonProperty("Temperature_C")
+        @com.fasterxml.jackson.annotation.JsonAlias({"temperature_C", "temperature"})
         private Double temperature_C;
 
         public Sensors() {

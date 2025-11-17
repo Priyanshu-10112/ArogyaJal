@@ -15,7 +15,9 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/clusters")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:8081"}, 
+           allowedHeaders = "*", 
+           allowCredentials = "true")
 public class SymptomClusterController {
 
     private final SymptomClusterService clusterService;

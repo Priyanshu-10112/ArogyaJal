@@ -7,11 +7,13 @@ import com.arogyajal.model.SymptomReport;
 import com.arogyajal.service.AlertService;
 import com.arogyajal.service.SensorService;
 import com.arogyajal.service.SymptomService;
+import com.arogyajal.service.SymptomClusterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 //import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,15 +47,19 @@ public class DashboardController {
     private final SensorService sensorService;
     private final SymptomService symptomService;
     private final AlertService alertService;
+    private final SymptomClusterService clusterService;
 
-    public DashboardController(SensorService sensorService, SymptomService symptomService, AlertService alertService) {
+    public DashboardController(SensorService sensorService, SymptomService symptomService, 
+                              AlertService alertService, SymptomClusterService clusterService) {
         this.sensorService = sensorService;
         this.symptomService = symptomService;
         this.alertService = alertService;
+        this.clusterService = clusterService;
     }
     
     @GetMapping("/overview")
     @Operation(summary = "Get dashboard overview", description = "Retrieve overall dashboard metrics and status")
+    @Cacheable(value = "dashboard", key = "'overview'")
     public ResponseEntity<Object> getDashboardOverview() {
         log.info("Retrieving dashboard overview");
         try {
@@ -135,29 +141,41 @@ public class DashboardController {
     
     @GetMapping("/alerts/summary")
     @Operation(summary = "Get alerts summary", description = "Retrieve summary of all alerts")
-    public ResponseEntity<Object> getAlertsSummary() {
+    public ResponseEntity<Map<String, Object>> getAlertsSummary() {
         log.info("Retrieving alerts summary");
         
-        List<Alert> allAlerts = alertService.getAllAlerts();
-        List<Alert> activeAlerts = alertService.getActiveAlerts();
-        List<Alert> criticalAlerts = alertService.getCriticalAlerts();
-        
-        AlertsSummaryResponse response = new AlertsSummaryResponse();
-        response.totalAlerts = allAlerts.size();
-        response.activeAlerts = activeAlerts.size();
-        response.criticalAlerts = criticalAlerts.size();
-        response.recentAlerts = allAlerts.stream()
-                .sorted((a, b) -> b.getTriggeredAt().compareTo(a.getTriggeredAt()))
-                .limit(10)
-                .collect(Collectors.toList());
-        
-        return ResponseEntity.ok(response);
+        try {
+            List<Alert> allAlerts = alertService.getAllAlerts();
+            List<Alert> activeAlerts = alertService.getActiveAlerts();
+            List<Alert> criticalAlerts = alertService.getCriticalAlerts();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("totalAlerts", allAlerts != null ? allAlerts.size() : 0);
+            response.put("activeAlerts", activeAlerts != null ? activeAlerts.size() : 0);
+            response.put("criticalAlerts", criticalAlerts != null ? criticalAlerts.size() : 0);
+            response.put("recentAlertsCount", allAlerts != null ? Math.min(allAlerts.size(), 10) : 0);
+            // Don't include full alert objects to avoid serialization issues
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error retrieving alerts summary", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to retrieve alerts summary");
+            errorResponse.put("message", e.getMessage());
+            errorResponse.put("totalAlerts", 0);
+            errorResponse.put("activeAlerts", 0);
+            errorResponse.put("criticalAlerts", 0);
+            errorResponse.put("recentAlertsCount", 0);
+            return ResponseEntity.ok(errorResponse);
+        }
     }
     
     @GetMapping("/symptoms/summary")
     @Operation(summary = "Get symptoms summary", description = "Retrieve summary of symptom reports")
     public ResponseEntity<Object> getSymptomsSummary() {
         log.info("Retrieving symptoms summary");
+        
+        try {
         
         long totalReports = symptomService.getReportCount();
         long pendingReports = symptomService.getReportCountByStatus("PENDING");
@@ -169,15 +187,22 @@ public class DashboardController {
         List<SymptomReport> recentHighSeverity = symptomService.getHighSeverityRecentReports(last24Hours);
         
         SymptomsSummaryResponse response = new SymptomsSummaryResponse();
-        response.totalReports = totalReports;
-        response.pendingReports = pendingReports;
-        response.resolvedReports = resolvedReports;
-        response.recentHighSeverityReports = recentHighSeverity.size();
-        response.recentReports = recentHighSeverity.stream()
-                .limit(10)
-                .collect(Collectors.toList());
-        
-        return ResponseEntity.ok(response);
+            response.setTotalReports(totalReports);
+            response.setPendingReports(pendingReports);
+            response.setResolvedReports(resolvedReports);
+            response.setRecentHighSeverityReports(recentHighSeverity != null ? recentHighSeverity.size() : 0);
+            response.setRecentReports(recentHighSeverity != null ? recentHighSeverity.stream()
+                    .limit(10)
+                    .collect(Collectors.toList()) : new ArrayList<>());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error retrieving symptoms summary", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Failed to retrieve symptoms summary");
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
     }
     
     @GetMapping("/water-quality/trends")
@@ -221,9 +246,9 @@ public class DashboardController {
         }
         
         WaterQualityTrendsResponse response = new WaterQualityTrendsResponse();
-        response.trends = trends;
-        response.latestValues = latestValues;
-        response.timeRange = hours + " hours";
+        response.setTrends(trends);
+        response.setLatestValues(latestValues);
+        response.setTimeRange(hours + " hours");
         
         return ResponseEntity.ok(response);
     }
@@ -287,8 +312,8 @@ public class DashboardController {
         }
         
         LocationsSummaryResponse response = new LocationsSummaryResponse();
-        response.locations = locationSummaries;
-        response.totalLocations = locationSummaries.size();
+        response.setLocations(locationSummaries);
+        response.setTotalLocations(locationSummaries.size());
         
         return ResponseEntity.ok(response);
     }
@@ -370,29 +395,141 @@ public class DashboardController {
     }
     
     public static class AlertsSummaryResponse {
-        public long totalAlerts;
-        public long activeAlerts;
-        public long criticalAlerts;
-        public List<Alert> recentAlerts;
+        private long totalAlerts;
+        private long activeAlerts;
+        private long criticalAlerts;
+        private List<Alert> recentAlerts;
+        
+        public long getTotalAlerts() {
+            return totalAlerts;
+        }
+        
+        public void setTotalAlerts(long totalAlerts) {
+            this.totalAlerts = totalAlerts;
+        }
+        
+        public long getActiveAlerts() {
+            return activeAlerts;
+        }
+        
+        public void setActiveAlerts(long activeAlerts) {
+            this.activeAlerts = activeAlerts;
+        }
+        
+        public long getCriticalAlerts() {
+            return criticalAlerts;
+        }
+        
+        public void setCriticalAlerts(long criticalAlerts) {
+            this.criticalAlerts = criticalAlerts;
+        }
+        
+        public List<Alert> getRecentAlerts() {
+            return recentAlerts;
+        }
+        
+        public void setRecentAlerts(List<Alert> recentAlerts) {
+            this.recentAlerts = recentAlerts;
+        }
     }
     
     public static class SymptomsSummaryResponse {
-        public long totalReports;
-        public long pendingReports;
-        public long resolvedReports;
-        public long recentHighSeverityReports;
-        public List<SymptomReport> recentReports;
+        private long totalReports;
+        private long pendingReports;
+        private long resolvedReports;
+        private long recentHighSeverityReports;
+        private List<SymptomReport> recentReports;
+        
+        public long getTotalReports() {
+            return totalReports;
+        }
+        
+        public void setTotalReports(long totalReports) {
+            this.totalReports = totalReports;
+        }
+        
+        public long getPendingReports() {
+            return pendingReports;
+        }
+        
+        public void setPendingReports(long pendingReports) {
+            this.pendingReports = pendingReports;
+        }
+        
+        public long getResolvedReports() {
+            return resolvedReports;
+        }
+        
+        public void setResolvedReports(long resolvedReports) {
+            this.resolvedReports = resolvedReports;
+        }
+        
+        public long getRecentHighSeverityReports() {
+            return recentHighSeverityReports;
+        }
+        
+        public void setRecentHighSeverityReports(long recentHighSeverityReports) {
+            this.recentHighSeverityReports = recentHighSeverityReports;
+        }
+        
+        public List<SymptomReport> getRecentReports() {
+            return recentReports;
+        }
+        
+        public void setRecentReports(List<SymptomReport> recentReports) {
+            this.recentReports = recentReports;
+        }
     }
     
     public static class WaterQualityTrendsResponse {
-        public Map<String, List<DashboardResponse.DataPoint>> trends;
-        public Map<String, Double> latestValues;
-        public String timeRange;
+        private Map<String, List<DashboardResponse.DataPoint>> trends;
+        private Map<String, Double> latestValues;
+        private String timeRange;
+        
+        public Map<String, List<DashboardResponse.DataPoint>> getTrends() {
+            return trends;
+        }
+        
+        public void setTrends(Map<String, List<DashboardResponse.DataPoint>> trends) {
+            this.trends = trends;
+        }
+        
+        public Map<String, Double> getLatestValues() {
+            return latestValues;
+        }
+        
+        public void setLatestValues(Map<String, Double> latestValues) {
+            this.latestValues = latestValues;
+        }
+        
+        public String getTimeRange() {
+            return timeRange;
+        }
+        
+        public void setTimeRange(String timeRange) {
+            this.timeRange = timeRange;
+        }
     }
     
     public static class LocationsSummaryResponse {
-        public List<DashboardResponse.LocationSummary> locations;
-        public int totalLocations;
+        private List<DashboardResponse.LocationSummary> locations;
+        private int totalLocations;
+        
+        public List<DashboardResponse.LocationSummary> getLocations() {
+            return locations;
+        }
+        
+        public void setLocations(List<DashboardResponse.LocationSummary> locations) {
+            this.locations = locations;
+        }
+        
+        public int getTotalLocations() {
+            return totalLocations;
+        }
+        
+        public void setTotalLocations(int totalLocations) {
+            this.totalLocations = totalLocations;
+        }
     }
     
     /**
@@ -420,7 +557,14 @@ public class DashboardController {
                 .filter(s -> s.getTimestamp() != null)
                 .count() : 0);
             stats.put("totalReports", allReports != null ? allReports.size() : 0);
-            stats.put("activeClusters", 0); // Will be updated when clusters are implemented
+            // Get active clusters count
+            int activeClusters = 0;
+            try {
+                activeClusters = clusterService.getActiveClusters().size();
+            } catch (Exception e) {
+                log.warn("Error getting active clusters: {}", e.getMessage());
+            }
+            stats.put("activeClusters", activeClusters);
             stats.put("activeAlerts", allAlerts != null ? allAlerts.stream()
                 .filter(a -> "ACTIVE".equals(a.getStatus()))
                 .count() : 0);

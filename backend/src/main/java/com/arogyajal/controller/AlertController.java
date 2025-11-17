@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -113,14 +114,22 @@ public class AlertController {
 
     @GetMapping("/critical")
     @Operation(summary = "Get critical alerts", description = "Retrieve all critical severity alerts")
-    public ResponseEntity<List<Alert>> getCriticalAlerts() {
+    public ResponseEntity<Map<String, Object>> getCriticalAlerts() {
         log.info("Retrieving critical alerts");
         try {
             List<Alert> alerts = alertService.getCriticalAlerts();
-            return ResponseEntity.ok(alerts);
+            log.info("Retrieved {} critical alerts", alerts != null ? alerts.size() : 0);
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("alerts", alerts != null ? alerts : new ArrayList<>());
+            response.put("count", alerts != null ? alerts.size() : 0);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Error retrieving critical alerts", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            Map<String, Object> errorResponse = new java.util.HashMap<>();
+            errorResponse.put("alerts", new ArrayList<>());
+            errorResponse.put("count", 0);
+            errorResponse.put("error", e.getMessage());
+            return ResponseEntity.ok(errorResponse);
         }
     }
 

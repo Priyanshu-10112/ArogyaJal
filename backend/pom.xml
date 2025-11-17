@@ -104,6 +104,16 @@
             <!--<version>1.18.30</version> -->
             <scope>provided</scope>
         </dependency>
+        
+        <!-- Caching to reduce Firestore quota usage -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
 	</dependencies>
 
 	<build>

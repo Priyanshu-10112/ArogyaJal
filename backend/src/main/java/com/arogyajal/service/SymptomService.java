@@ -16,9 +16,11 @@ public class SymptomService {
     private static final Logger log = LoggerFactory.getLogger(SymptomService.class);
     
     private final SymptomRepository symptomRepository;
+    private final AlertService alertService;
 
-    public SymptomService(SymptomRepository symptomRepository) {
+    public SymptomService(SymptomRepository symptomRepository, AlertService alertService) {
         this.symptomRepository = symptomRepository;
+        this.alertService = alertService;
     }
     
     public SymptomReport saveSymptomReport(SymptomRequest request) {
@@ -38,6 +40,10 @@ public class SymptomService {
                 geoPoint = new com.google.cloud.firestore.GeoPoint(lat, lon);
             }
             
+            // Set defaults for optional fields
+            String duration = request.getDuration() != null ? request.getDuration() : "DAYS";
+            Integer waterConsumption = request.getWaterConsumption() != null ? request.getWaterConsumption() : 0;
+            
             SymptomReport report = SymptomReport.builder()
                     .id(reportId)
                     .userId(request.getUserId())
@@ -50,8 +56,8 @@ public class SymptomService {
                     .patientGender(request.getPatientGender())
                     .symptoms(request.getSymptoms())
                     .severity(request.getSeverity())
-                    .duration(request.getDuration())
-                    .waterConsumption(request.getWaterConsumption())
+                    .duration(duration)
+                    .waterConsumption(waterConsumption)
                     .lastWaterConsumption(com.google.cloud.Timestamp.now())
                     .additionalNotes(request.getAdditionalNotes())
                     .contactInfo(request.getContactInfo())
@@ -64,7 +70,18 @@ public class SymptomService {
             report.setPatientName(request.getPatientName());
             report.setPatientPhone(request.getPatientPhone());
             
-            return symptomRepository.save(report);
+            SymptomReport savedReport = symptomRepository.save(report);
+            
+            // Check for symptom clusters after saving
+            try {
+                alertService.checkForSymptomClusterAlerts(request.getLocation());
+                log.info("Checked for symptom clusters in location: {}", request.getLocation());
+            } catch (Exception e) {
+                log.error("Error checking for symptom clusters: {}", e.getMessage(), e);
+                // Don't fail the entire operation if cluster check fails
+            }
+            
+            return savedReport;
         } catch (Exception e) {
             log.error("Error saving symptom report for user ID: {}", request.getUserId(), e);
             throw new RuntimeException("Failed to save symptom report", e);

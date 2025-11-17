@@ -20,10 +20,13 @@ public class AlertService {
     
     private final AlertRepository alertRepository;
     private final SymptomRepository symptomRepository;
+    private final SymptomClusterService clusterService;
 
-    public AlertService(AlertRepository alertRepository, SymptomRepository symptomRepository) {
+    public AlertService(AlertRepository alertRepository, SymptomRepository symptomRepository,
+                       SymptomClusterService clusterService) {
         this.alertRepository = alertRepository;
         this.symptomRepository = symptomRepository;
+        this.clusterService = clusterService;
     }
     
     public Alert createAlert(Alert alert) {
@@ -75,10 +78,36 @@ public class AlertService {
         log.info("Retrieving alerts with severity: {}", severity);
         try {
             return alertRepository.findBySeverity(severity);
-        } catch (ExecutionException | InterruptedException e) {
+        } catch (ExecutionException e) {
+            // Check if it's a Firestore index error
+            if (e.getCause() != null && e.getCause().getMessage() != null 
+                && e.getCause().getMessage().contains("requires an index")) {
+                log.warn("Firestore index not created for severity query. Using fallback query without ordering.");
+                try {
+                    // Fallback: Get all alerts and filter in memory
+                    List<Alert> allAlerts = alertRepository.findAll();
+                    return allAlerts.stream()
+                        .filter(a -> severity.equals(a.getSeverity()))
+                        .sorted((a, b) -> {
+                            if (a.getTriggeredAt() == null) return 1;
+                            if (b.getTriggeredAt() == null) return -1;
+                            return b.getTriggeredAt().compareTo(a.getTriggeredAt());
+                        })
+                        .toList();
+                } catch (Exception fallbackError) {
+                    log.error("Fallback query also failed", fallbackError);
+                    return new ArrayList<>();
+                }
+            }
+            log.error("Error retrieving alerts with severity: " + severity, e);
+            return new ArrayList<>();
+        } catch (InterruptedException e) {
             log.error("Error retrieving alerts with severity: " + severity, e);
             Thread.currentThread().interrupt(); // Restore the interrupted status
-            throw new RuntimeException("Failed to retrieve alerts by severity", e);
+            return new ArrayList<>();
+        } catch (Exception e) {
+            log.error("Unexpected error retrieving alerts with severity: " + severity, e);
+            return new ArrayList<>();
         }
     }
     
@@ -116,7 +145,12 @@ public class AlertService {
 
     public List<Alert> getCriticalAlerts() {
         log.info("Retrieving critical alerts");
-        return getAlertsBySeverity("CRITICAL");
+        try {
+            return getAlertsBySeverity("CRITICAL");
+        } catch (Exception e) {
+            log.error("Error retrieving critical alerts, returning empty list", e);
+            return new ArrayList<>();
+        }
     }
 
     public Alert acknowledgeAlert(String id, String userId) {
@@ -247,6 +281,7 @@ public class AlertService {
     }
 
     private void createSymptomClusterAlert(String location, List<SymptomReport> reports) {
+        // Create alert
         Alert alert = Alert.builder()
                 .alertType("SYMPTOM_CLUSTER")
                 .severity("HIGH")
@@ -257,7 +292,51 @@ public class AlertService {
                 .relatedSymptomReportIds(reports.stream().map(SymptomReport::getId).toList())
                 .build();
 
-        createAlert(alert);
+        Alert createdAlert = createAlert(alert);
+        
+        // Create cluster object
+        try {
+            // Calculate severity based on report count and individual severities
+            int severeCount = (int) reports.stream()
+                .filter(r -> "SEVERE".equals(r.getSeverity()))
+                .count();
+            int moderateCount = (int) reports.stream()
+                .filter(r -> "MODERATE".equals(r.getSeverity()))
+                .count();
+            
+            String overallSeverity;
+            if (severeCount >= 3 || reports.size() >= 10) {
+                overallSeverity = "SEVERE";
+            } else if (severeCount >= 1 || reports.size() >= 7) {
+                overallSeverity = "MODERATE";
+            } else {
+                overallSeverity = "MILD";
+            }
+            
+            // Calculate cluster score
+            double clusterScore = (reports.size() * 10) + (severeCount * 5) + (moderateCount * 2);
+            
+            // Build cluster object with ALL required fields
+            com.arogyajal.model.SymptomCluster cluster = com.arogyajal.model.SymptomCluster.builder()
+                    .location(location)
+                    .reportCount(reports.size())
+                    .reportIds(reports.stream().map(SymptomReport::getId).toList())
+                    .status("ACTIVE")
+                    .overallSeverity(overallSeverity)
+                    .detectionMethod("AUTOMATIC")
+                    .alertId(createdAlert.getId())
+                    .clusterScore(clusterScore)
+                    .alertGenerated(true)
+                    .detectedAt(com.google.cloud.Timestamp.now())
+                    .build();
+            
+            clusterService.createCluster(cluster);
+            log.info("Created cluster object for location: {} with {} reports", location, reports.size());
+            
+        } catch (Exception e) {
+            log.error("Error creating cluster object: {}", e.getMessage(), e);
+            // Don't fail alert creation if cluster creation fails
+        }
     }
 
     private String getSeverityForParameter(String parameter, double value) {

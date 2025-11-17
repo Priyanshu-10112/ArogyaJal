@@ -5,6 +5,8 @@ import com.arogyajal.model.SensorReading;
 import com.arogyajal.repository.SensorRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 
 import com.google.cloud.Timestamp;
@@ -21,11 +23,14 @@ public class SensorService {
     private final SensorRepository sensorRepository;
     private final MLPredictionService mlPredictionService;
     private final AlertService alertService;
+    private final SensorHealthMonitorService sensorHealthMonitorService;
     
-    public SensorService(SensorRepository sensorRepository, MLPredictionService mlPredictionService, AlertService alertService) {
+    public SensorService(SensorRepository sensorRepository, MLPredictionService mlPredictionService, 
+                        AlertService alertService, SensorHealthMonitorService sensorHealthMonitorService) {
         this.sensorRepository = sensorRepository;
         this.mlPredictionService = mlPredictionService;
         this.alertService = alertService;
+        this.sensorHealthMonitorService = sensorHealthMonitorService;
     }
     
     /**
@@ -38,6 +43,7 @@ public class SensorService {
      * @param location The location to get readings for
      * @return List of sensor readings for the specified location, ordered by timestamp descending
      */
+    @Cacheable(value = "sensorReadings", key = "'location:' + #location")
     public List<SensorReading> getReadingsByLocation(String location) {
         try {
             return sensorRepository.findByLocationOrderByTimestampDesc(location);
@@ -47,6 +53,7 @@ public class SensorService {
         }
     }
     
+    @CacheEvict(value = {"sensorReadings", "sensors", "dashboard"}, allEntries = true)
     public SensorData processAndSaveSensorData(SensorData sensorData) {
         try {
             // Set current timestamp if not provided
@@ -73,18 +80,27 @@ public class SensorService {
             
             // Set sensor readings if available
             if (sensorData.getSensors() != null) {
-                // Set available sensor readings
-                reading.setPh(sensorData.getSensors().getPH());
-                reading.setTemperature(sensorData.getSensors().getTemperature_C());
+                // Set available sensor readings - use null/0 for missing sensors
+                // Don't use fake default values - let the system know data is missing
+                reading.setPh(sensorData.getSensors().getPH() != null ? 
+                    sensorData.getSensors().getPH() : 0.0);
+                
+                reading.setTemperature(sensorData.getSensors().getTemperature_C() != null ? 
+                    sensorData.getSensors().getTemperature_C() : 0.0);
                 
                 if (sensorData.getSensors().getTurbidity_NTU() != null) {
                     reading.setTurbidity(sensorData.getSensors().getTurbidity_NTU().doubleValue());
+                } else {
+                    reading.setTurbidity(0.0);
                 }
                 
-                reading.setDissolvedOxygen(sensorData.getSensors().getDO_mgL());
+                reading.setDissolvedOxygen(sensorData.getSensors().getDO_mgL() != null ? 
+                    sensorData.getSensors().getDO_mgL() : 0.0);
                 
                 if (sensorData.getSensors().getTDS_ppm() != null) {
                     reading.setTotalDissolvedSolids(sensorData.getSensors().getTDS_ppm().doubleValue());
+                } else {
+                    reading.setTotalDissolvedSolids(0.0);
                 }
                 
                 // Set default values for missing sensor readings
@@ -94,28 +110,47 @@ public class SensorService {
                 reading.setWaterLevel(0.0);     // Default value for water level
                 reading.setFlowRate(0.0);       // Default value for flow rate
                 
-                // Call ML service to predict WQI
-                try {
-                    MLPredictionService.WQIPrediction prediction = mlPredictionService.predictWQI(
-                        reading.getPh(),
-                        reading.getTemperature(),
-                        reading.getTotalDissolvedSolids(),
-                        reading.getDissolvedOxygen(),
-                        reading.getTurbidity()
-                    );
-                    
-                    if (prediction.isSuccess()) {
-                        reading.setQualityStatus(prediction.getQualityStatus());
-                        log.info("ML Prediction - WQI: {}, Status: {}", prediction.getWqi(), prediction.getQualityStatus());
-                    } else {
+                // Check if we have enough sensor data for ML prediction
+                int availableSensors = 0;
+                if (reading.getPh() != null && reading.getPh() > 0) availableSensors++;
+                if (reading.getTemperature() != null && reading.getTemperature() > 0) availableSensors++;
+                if (reading.getTotalDissolvedSolids() != null && reading.getTotalDissolvedSolids() > 0) availableSensors++;
+                if (reading.getDissolvedOxygen() != null && reading.getDissolvedOxygen() > 0) availableSensors++;
+                if (reading.getTurbidity() != null && reading.getTurbidity() > 0) availableSensors++;
+                
+                boolean hasSufficientData = availableSensors >= 3;
+                
+                // Check sensor health
+                sensorHealthMonitorService.checkSensorHealth(deviceId, hasSufficientData, reading);
+                
+                // Only call ML service if we have at least 3 sensors
+                if (hasSufficientData) {
+                    try {
+                        MLPredictionService.WQIPrediction prediction = mlPredictionService.predictWQI(
+                            reading.getPh(),
+                            reading.getTemperature(),
+                            reading.getTotalDissolvedSolids(),
+                            reading.getDissolvedOxygen(),
+                            reading.getTurbidity()
+                        );
+                        
+                        if (prediction.isSuccess()) {
+                            reading.setQualityStatus(prediction.getQualityStatus());
+                            log.info("ML Prediction - WQI: {}, Status: {}", prediction.getWqi(), prediction.getQualityStatus());
+                        } else {
+                            // Fallback: Calculate quality status based on parameters
+                            reading.setQualityStatus(calculateQualityStatus(reading));
+                            log.warn("ML prediction failed, using fallback calculation: {}", reading.getQualityStatus());
+                        }
+                    } catch (Exception e) {
+                        log.error("Error calling ML service: {}, using fallback calculation", e.getMessage());
                         // Fallback: Calculate quality status based on parameters
                         reading.setQualityStatus(calculateQualityStatus(reading));
-                        log.warn("ML prediction failed, using fallback calculation: {}", reading.getQualityStatus());
                     }
-                } catch (Exception e) {
-                    log.error("Error calling ML service: {}, using fallback calculation", e.getMessage());
-                    // Fallback: Calculate quality status based on parameters
-                    reading.setQualityStatus(calculateQualityStatus(reading));
+                } else {
+                    // Not enough sensors for ML prediction
+                    log.warn("Insufficient sensor data ({} sensors) for ML prediction. Setting status to UNKNOWN", availableSensors);
+                    reading.setQualityStatus("UNKNOWN");
                 }
             } else {
                 // If no sensor data is available, set all values to defaults
@@ -140,6 +175,12 @@ public class SensorService {
             // Save to database with a generated document ID
             String documentId = UUID.randomUUID().toString();
             reading.setId(documentId);
+            
+            // Debug log before save
+            log.info("About to save - pH: {}, temp: {}, turbidity: {}, DO: {}, TDS: {}", 
+                reading.getPh(), reading.getTemperature(), reading.getTurbidity(), 
+                reading.getDissolvedOxygen(), reading.getTotalDissolvedSolids());
+            
             sensorRepository.save(reading, documentId);
             log.info("Saved sensor data for device: {} with ID: {}", deviceId, documentId);
             
@@ -164,6 +205,7 @@ public class SensorService {
      * Get the latest sensor data
      * @return The most recent sensor data, or null if no data is available
      */
+    @Cacheable(value = "sensors", key = "'latest'")
     public SensorData getLatestSensorData() {
         try {
             // First try to get all device IDs
@@ -224,6 +266,7 @@ public class SensorService {
      * @param deviceId The device ID to retrieve data for
      * @return The sensor data for the specified device, or null if not found
      */
+    @Cacheable(value = "sensors", key = "'device:' + #deviceId")
     public SensorData getSensorDataByDeviceId(String deviceId) {
         try {
             log.info("Fetching sensor data for device: {}", deviceId);
@@ -629,9 +672,11 @@ public class SensorService {
     private String calculateQualityStatus(SensorReading reading) {
         int criticalCount = 0;
         int warningCount = 0;
+        int availableSensors = 0;
         
         // Check pH (ideal: 6.5-8.5)
-        if (reading.getPh() != null) {
+        if (reading.getPh() != null && reading.getPh() > 0) {
+            availableSensors++;
             if (reading.getPh() < 6.0 || reading.getPh() > 9.0) {
                 criticalCount++;
             } else if (reading.getPh() < 6.5 || reading.getPh() > 8.5) {
@@ -639,17 +684,19 @@ public class SensorService {
             }
         }
         
-        // Check temperature (ideal: < 30°C)
-        if (reading.getTemperature() != null) {
-            if (reading.getTemperature() > 35) {
+        // Check temperature (ideal: 15-30°C)
+        if (reading.getTemperature() != null && reading.getTemperature() > 0) {
+            availableSensors++;
+            if (reading.getTemperature() > 35 || reading.getTemperature() < 10) {
                 criticalCount++;
-            } else if (reading.getTemperature() > 30) {
+            } else if (reading.getTemperature() > 30 || reading.getTemperature() < 15) {
                 warningCount++;
             }
         }
         
         // Check TDS (ideal: < 500 ppm)
-        if (reading.getTotalDissolvedSolids() != null) {
+        if (reading.getTotalDissolvedSolids() != null && reading.getTotalDissolvedSolids() > 0) {
+            availableSensors++;
             if (reading.getTotalDissolvedSolids() > 1000) {
                 criticalCount++;
             } else if (reading.getTotalDissolvedSolids() > 500) {
@@ -658,7 +705,8 @@ public class SensorService {
         }
         
         // Check DO (ideal: > 6 mg/L)
-        if (reading.getDissolvedOxygen() != null) {
+        if (reading.getDissolvedOxygen() != null && reading.getDissolvedOxygen() > 0) {
+            availableSensors++;
             if (reading.getDissolvedOxygen() < 4) {
                 criticalCount++;
             } else if (reading.getDissolvedOxygen() < 6) {
@@ -667,12 +715,19 @@ public class SensorService {
         }
         
         // Check turbidity (ideal: < 5 NTU)
-        if (reading.getTurbidity() != null) {
+        if (reading.getTurbidity() != null && reading.getTurbidity() > 0) {
+            availableSensors++;
             if (reading.getTurbidity() > 10) {
                 criticalCount++;
             } else if (reading.getTurbidity() > 5) {
                 warningCount++;
             }
+        }
+        
+        // If less than 3 sensors available, return UNKNOWN
+        if (availableSensors < 3) {
+            log.warn("Insufficient sensor data for quality assessment. Available sensors: {}", availableSensors);
+            return "UNKNOWN";
         }
         
         // Determine overall status

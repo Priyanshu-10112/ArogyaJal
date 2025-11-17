@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import StyledJsxStyle from '../components/StyledJsxStyle';
+import SensorHealthWidget from '../components/SensorHealthWidget';
 import '../App.css';
 import { 
   testFirebaseConnection,
@@ -425,38 +426,44 @@ const Dashboard: React.FC = () => {
   const getWaterQualityScore = (deviceData: DashboardData['deviceData']): number => {
     if (!deviceData) return 0;
     
+    // If status is UNKNOWN, return -1 to indicate insufficient data
+    if (deviceData.qualityStatus === 'UNKNOWN') {
+      return -1;
+    }
+    
     let score = 0;
     let count = 0;
     
-    // PH (6.5-8.5 is good)
-    if (deviceData.ph !== undefined && deviceData.ph !== null) {
+    // PH (6.5-8.5 is good) - ignore if 0
+    if (deviceData.ph !== undefined && deviceData.ph !== null && deviceData.ph > 0) {
       const phScore = Math.max(0, 100 - Math.abs(deviceData.ph - 7.5) * 20);
       score += phScore;
       count++;
     }
     
-    // Turbidity (lower is better, 0-5 NTU is good)
-    if (deviceData.turbidity !== undefined && deviceData.turbidity !== null) {
+    // Turbidity (lower is better, 0-5 NTU is good) - ignore if 0
+    if (deviceData.turbidity !== undefined && deviceData.turbidity !== null && deviceData.turbidity > 0) {
       const turbidityScore = Math.max(0, 100 - (deviceData.turbidity * 2));
       score += turbidityScore;
       count++;
     }
     
-    // TDS (0-300 ppm is good)
-    if (deviceData.totalDissolvedSolids !== undefined && deviceData.totalDissolvedSolids !== null) {
+    // TDS (0-300 ppm is good) - ignore if 0
+    if (deviceData.totalDissolvedSolids !== undefined && deviceData.totalDissolvedSolids !== null && deviceData.totalDissolvedSolids > 0) {
       const tdsScore = Math.max(0, 100 - (deviceData.totalDissolvedSolids / 10));
       score += tdsScore;
       count++;
     }
     
-    // Dissolved Oxygen (>5 mg/L is good)
-    if (deviceData.dissolvedOxygen !== undefined && deviceData.dissolvedOxygen !== null) {
+    // Dissolved Oxygen (>5 mg/L is good) - ignore if 0
+    if (deviceData.dissolvedOxygen !== undefined && deviceData.dissolvedOxygen !== null && deviceData.dissolvedOxygen > 0) {
       const doScore = Math.min(100, deviceData.dissolvedOxygen * 10);
       score += doScore;
       count++;
     }
     
-    return count > 0 ? Math.round(score / count) : 0;
+    // If less than 3 sensors have valid data, return -1
+    return count >= 3 ? Math.round(score / count) : -1;
   };
   
   const waterQualityScore = dashboardData.deviceData ? getWaterQualityScore(dashboardData.deviceData) : 0;
@@ -633,9 +640,10 @@ const Dashboard: React.FC = () => {
             <div className="info-card">
               <h3>📊 Quality Assessment</h3>
               <p><strong>ML Prediction:</strong> {dashboardData.deviceData.qualityStatus}</p>
-              <p><strong>Overall Score:</strong> {waterQualityScore}/100</p>
+              <p><strong>Overall Score:</strong> {waterQualityScore === -1 ? 'N/A (Insufficient data)' : `${waterQualityScore}/100`}</p>
               <p><strong>Status:</strong> 
-                {waterQualityScore >= 90 ? ' Excellent water quality' :
+                {waterQualityScore === -1 ? ' Insufficient sensor data for assessment' :
+                 waterQualityScore >= 90 ? ' Excellent water quality' :
                  waterQualityScore >= 70 ? ' Good water quality' :
                  waterQualityScore >= 50 ? ' Fair water quality' : ' Poor water quality'}
               </p>
@@ -643,6 +651,9 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Sensor Health Monitoring Widget */}
+      <SensorHealthWidget />
 
       <StyledJsxStyle jsx>{`
         .dashboard-header {

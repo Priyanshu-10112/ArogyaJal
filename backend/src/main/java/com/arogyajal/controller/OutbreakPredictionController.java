@@ -16,7 +16,9 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/predictions")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:8081"}, 
+           allowedHeaders = "*", 
+           allowCredentials = "true")
 public class OutbreakPredictionController {
 
     private final OutbreakPredictionService predictionService;

@@ -118,13 +118,30 @@ public class SymptomRepository {
     // Find reports by severity
     public List<SymptomReport> findBySeverityOrderByReportedAtDesc(String severity) {
         try {
+            // Try with orderBy first
             ApiFuture<QuerySnapshot> future = db.collection(COLLECTION_NAME)
                     .whereEqualTo("severity", severity)
                     .orderBy("reportedAt", Query.Direction.DESCENDING)
                     .get();
             return getSymptomReports(future);
         } catch (Exception e) {
-            throw new RuntimeException("Error finding symptom reports by severity", e);
+            // Fallback: Query without orderBy if index is missing
+            try {
+                ApiFuture<QuerySnapshot> future = db.collection(COLLECTION_NAME)
+                        .whereEqualTo("severity", severity)
+                        .get();
+                List<SymptomReport> reports = getSymptomReports(future);
+                // Sort in memory
+                reports.sort((r1, r2) -> {
+                    if (r1.getReportedAt() == null && r2.getReportedAt() == null) return 0;
+                    if (r1.getReportedAt() == null) return 1;
+                    if (r2.getReportedAt() == null) return -1;
+                    return r2.getReportedAt().compareTo(r1.getReportedAt());
+                });
+                return reports;
+            } catch (Exception fallbackError) {
+                throw new RuntimeException("Error finding symptom reports by severity", fallbackError);
+            }
         }
     }
     
@@ -251,13 +268,27 @@ public class SymptomRepository {
     // Find reports with high severity and recent timestamp
     public List<SymptomReport> findHighSeverityRecentReports(Timestamp date) {
         try {
+            // Try with both filters
             ApiFuture<QuerySnapshot> future = db.collection(COLLECTION_NAME)
                     .whereEqualTo("severity", "HIGH")
                     .whereGreaterThanOrEqualTo("reportedAt", date)
                     .get();
             return getSymptomReports(future);
         } catch (Exception e) {
-            throw new RuntimeException("Error finding high severity recent reports", e);
+            // Fallback: Get all HIGH severity and filter by date in memory
+            try {
+                ApiFuture<QuerySnapshot> future = db.collection(COLLECTION_NAME)
+                        .whereEqualTo("severity", "HIGH")
+                        .get();
+                List<SymptomReport> reports = getSymptomReports(future);
+                // Filter by date in memory
+                return reports.stream()
+                        .filter(r -> r.getReportedAt() != null && r.getReportedAt().compareTo(date) >= 0)
+                        .collect(java.util.stream.Collectors.toList());
+            } catch (Exception fallbackError) {
+                // Final fallback: return empty list
+                return new ArrayList<>();
+            }
         }
     }
     

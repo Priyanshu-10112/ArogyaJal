@@ -44,6 +44,13 @@ public class MLPredictionService {
     public WQIPrediction predictWQI(Double ph, Double temperature, Double tds, 
                                     Double dissolvedOxygen, Double turbidity) {
         try {
+            // Check if all required fields are present
+            if (ph == null || temperature == null || tds == null || 
+                dissolvedOxygen == null || turbidity == null) {
+                log.warn("Missing required fields for ML prediction. Using fallback.");
+                return new WQIPrediction(0.0, "UNKNOWN", false, "Missing required sensor readings");
+            }
+            
             // Prepare request data
             Map<String, Object> requestData = new HashMap<>();
             requestData.put("ph", ph);

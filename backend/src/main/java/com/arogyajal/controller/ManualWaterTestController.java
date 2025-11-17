@@ -15,7 +15,9 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/water-tests")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:8081"}, 
+           allowedHeaders = "*", 
+           allowCredentials = "true")
 public class ManualWaterTestController {
 
     private final ManualWaterTestService testService;
@@ -29,8 +31,50 @@ public class ManualWaterTestController {
      * POST /api/water-tests
      */
     @PostMapping
-    public ResponseEntity<?> createTest(@RequestBody ManualWaterTest test) {
+    public ResponseEntity<?> createTest(@RequestBody Map<String, Object> testData) {
         try {
+            // Convert Map to ManualWaterTest
+            ManualWaterTest test = new ManualWaterTest();
+            test.setTesterId((String) testData.get("testerId"));
+            test.setTesterName((String) testData.get("testerName"));
+            test.setLocation((String) testData.get("location"));
+            
+            // Handle GeoPoint conversion
+            if (testData.containsKey("geoLocation")) {
+                @SuppressWarnings("unchecked")
+                Map<String, Double> geoData = (Map<String, Double>) testData.get("geoLocation");
+                if (geoData != null && geoData.containsKey("latitude") && geoData.containsKey("longitude")) {
+                    test.setGeoLocation(new com.google.cloud.firestore.GeoPoint(
+                        geoData.get("latitude"), 
+                        geoData.get("longitude")
+                    ));
+                }
+            }
+            
+            // Set water quality parameters
+            if (testData.containsKey("ph")) {
+                test.setPh(((Number) testData.get("ph")).doubleValue());
+            }
+            if (testData.containsKey("turbidity")) {
+                test.setTurbidity(((Number) testData.get("turbidity")).doubleValue());
+            }
+            if (testData.containsKey("tds")) {
+                test.setTds(((Number) testData.get("tds")).intValue());
+            }
+            if (testData.containsKey("dissolvedOxygen")) {
+                test.setDissolvedOxygen(((Number) testData.get("dissolvedOxygen")).doubleValue());
+            }
+            if (testData.containsKey("temperature")) {
+                test.setTemperature(((Number) testData.get("temperature")).doubleValue());
+            }
+            
+            // Set metadata
+            test.setTestKitType((String) testData.get("testKitType"));
+            test.setPhotoUrl((String) testData.get("photoUrl"));
+            test.setNotes((String) testData.get("notes"));
+            test.setWaterSourceType((String) testData.get("waterSourceType"));
+            test.setWaterSourceId((String) testData.get("waterSourceId"));
+            
             ManualWaterTest created = testService.createTest(test);
             return ResponseEntity.status(HttpStatus.CREATED).body(created);
         } catch (IllegalArgumentException e) {

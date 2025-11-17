@@ -43,14 +43,12 @@ public class SymptomRequest {
     @Pattern(regexp = "MILD|MODERATE|SEVERE", message = "Severity must be MILD, MODERATE, or SEVERE")
     private String severity;
     
-    @NotBlank(message = "Duration is required")
     @Pattern(regexp = "HOURS|DAYS|WEEKS", message = "Duration must be HOURS, DAYS, or WEEKS")
-    private String duration;
+    private String duration; // Optional - defaults to "DAYS" if not provided
     
-    @NotNull(message = "Water consumption is required")
     @Min(value = 0, message = "Water consumption must be positive")
     @Max(value = 20, message = "Water consumption must be reasonable")
-    private Integer waterConsumption;
+    private Integer waterConsumption; // Optional - defaults to 0 if not provided
     
     private String additionalNotes;
     

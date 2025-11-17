@@ -15,8 +15,13 @@ public class SensorReading {
     private String location;
     
     // Water quality parameters
+    @com.google.cloud.firestore.annotation.PropertyName("ph")
     private Double ph;
+    
+    @com.google.cloud.firestore.annotation.PropertyName("temperature")
     private Double temperature;
+    
+    @com.google.cloud.firestore.annotation.PropertyName("turbidity")
     private Double turbidity;
     private Double dissolvedOxygen;
     private Double conductivity;

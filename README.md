@@ -1,6 +1,6 @@
 # 🌊 ArogyaJal - Water Quality & Disease Outbreak Monitoring System
 
-**Smart India Hackathon 2025 - Problem Statement ID: SIH1644**
+**Smart India Hackathon 2025 - Problem Statement ID: SIH25001**
 
 Real-time IoT-based water quality monitoring and ML-powered disease outbreak detection for North East India.
 

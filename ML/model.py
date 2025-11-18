@@ -97,6 +97,77 @@ class WaterQualityPredictor:
         # Ensure predictions are within 0-100 range
         return np.clip(predictions, 0, 100)
     
+    def predict_with_confidence(self, X):
+        """
+        Make predictions with confidence scores.
+        
+        Args:
+            X (pd.DataFrame or dict): Input features
+            
+        Returns:
+            tuple: (predictions, confidence_scores)
+        """
+        predictions = self.predict(X)
+        
+        # Calculate confidence based on tree predictions variance
+        if hasattr(self.model, 'estimators_'):
+            tree_predictions = np.array([tree.predict(self.scaler.transform(X if isinstance(X, pd.DataFrame) else pd.DataFrame([X])[self.features])) 
+                                        for tree in self.model.estimators_])
+            std_dev = np.std(tree_predictions, axis=0)
+            confidence = np.clip(100 - (std_dev * 2), 0, 100)
+        else:
+            confidence = np.full(len(predictions), 85.0)
+        
+        return predictions, confidence
+    
+    def classify_quality(self, wqi):
+        """
+        Classify water quality based on WQI score (NER-adjusted thresholds).
+        
+        Args:
+            wqi (float): Water Quality Index score
+            
+        Returns:
+            str: Quality status (EXCELLENT, GOOD, WARNING, CRITICAL)
+        """
+        if wqi >= 90:
+            return "EXCELLENT"
+        elif wqi >= 70:
+            return "GOOD"
+        elif wqi >= 50:
+            return "WARNING"
+        else:
+            return "CRITICAL"
+    
+    def predict_batch(self, X_list):
+        """
+        Make predictions on multiple samples.
+        
+        Args:
+            X_list (list): List of feature dictionaries
+            
+        Returns:
+            list: List of prediction results with WQI and quality status
+        """
+        results = []
+        for X in X_list:
+            try:
+                wqi = self.predict(X)[0]
+                confidence = self.predict_with_confidence(X)[1][0]
+                quality = self.classify_quality(wqi)
+                results.append({
+                    'wqi': float(wqi),
+                    'quality_status': quality,
+                    'confidence': float(confidence)
+                })
+            except Exception as e:
+                results.append({
+                    'error': str(e),
+                    'wqi': None,
+                    'quality_status': 'UNKNOWN'
+                })
+        return results
+    
     def save_model(self):
         """Save the trained model and scaler to disk."""
         if self.model is None:

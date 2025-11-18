@@ -1,5 +1,7 @@
 package com.arogyajal.controller;
 
+import com.arogyajal.model.SymptomReport;
+import com.arogyajal.service.SymptomService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
@@ -10,6 +12,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
@@ -30,9 +35,11 @@ public class MLController {
     private String mlServiceUrl;
     
     private final RestTemplate restTemplate;
+    private final SymptomService symptomService;
     
-    public MLController(RestTemplate restTemplate) {
+    public MLController(RestTemplate restTemplate, SymptomService symptomService) {
         this.restTemplate = restTemplate;
+        this.symptomService = symptomService;
     }
     
     /**
@@ -54,16 +61,74 @@ public class MLController {
                 return ResponseEntity.ok(createEmptyClusterResponse());
             }
             
-            // ML service is available, but we need symptom data to cluster
-            // For now, return empty response with proper message
-            // TODO: Fetch symptom reports from database and send to ML service
-            log.info("ML service available but clustering requires symptom report data");
-            return ResponseEntity.ok(createEmptyClusterResponse());
+            // Fetch symptom reports from database
+            List<SymptomReport> reports = symptomService.getAllSymptomReports();
+            
+            if (reports.isEmpty()) {
+                log.info("No symptom reports available for clustering");
+                return ResponseEntity.ok(createEmptyClusterResponse());
+            }
+            
+            log.info("Fetched {} symptom reports for clustering", reports.size());
+            
+            // Transform reports for ML service
+            List<Map<String, Object>> transformedReports = new ArrayList<>();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+            
+            for (SymptomReport report : reports) {
+                Map<String, Object> transformed = new HashMap<>();
+                transformed.put("id", report.getId());
+                transformed.put("location", report.getLocation());
+                transformed.put("symptoms", report.getSymptoms());
+                transformed.put("severity", report.getSeverity());
+                transformed.put("geoLocation", report.getGeoLocation());
+                
+                // Convert timestamp to ISO format without timezone
+                if (report.getReportedAt() != null) {
+                    Instant instant = Instant.ofEpochSecond(report.getReportedAt().getSeconds());
+                    transformed.put("reportDate", formatter.format(instant.atZone(ZoneId.systemDefault())));
+                } else {
+                    transformed.put("reportDate", formatter.format(Instant.now().atZone(ZoneId.systemDefault())));
+                }
+                
+                transformedReports.add(transformed);
+            }
+            
+            // Call ML clustering endpoint
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("reports", transformedReports);
+            
+            String clusterUrl = mlServiceUrl + "/api/ml/cluster";
+            log.info("Calling ML clustering at: {}", clusterUrl);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(clusterUrl, requestBody, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> result = response.getBody();
+                result.put("total_reports", reports.size());
+                log.info("Successfully clustered {} reports into {} clusters", 
+                        reports.size(), result.get("cluster_count"));
+                return ResponseEntity.ok(result);
+            } else {
+                log.warn("ML clustering returned non-success status");
+                return ResponseEntity.ok(createEmptyClusterResponse());
+            }
             
         } catch (Exception e) {
             log.error("Error fetching symptom clusters from ML service", e);
             return ResponseEntity.ok(createEmptyClusterResponse());
         }
+    }
+    
+    /**
+     * Manually trigger symptom clustering analysis
+     * POST endpoint for frontend "Run ML Clustering" button
+     */
+    @PostMapping("/symptom-clusters/analyze")
+    @Operation(summary = "Trigger clustering analysis", description = "Manually trigger ML clustering analysis")
+    public ResponseEntity<Map<String, Object>> triggerClustering() {
+        log.info("Manual clustering analysis triggered");
+        return getSymptomClusters(); // Reuse the GET logic
     }
     
     /**

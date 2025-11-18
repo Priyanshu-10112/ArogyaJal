@@ -28,8 +28,10 @@ const ClusterMap: React.FC = () => {
   }, []);
 
   const fetchClusters = async () => {
+    const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+    
     try {
-      const response = await fetch('http://localhost:8080/api/symptom-clusters');
+      const response = await fetch(`${API_BASE}/api/symptom-clusters`);
       if (response.ok) {
         const data = await response.json();
         

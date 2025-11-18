@@ -29,22 +29,24 @@ const SensorHealthWidget: React.FC = () => {
 
   useEffect(() => {
     fetchSensorHealth();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchSensorHealth, 30000);
+    // OPTIMIZED: Refresh every 5 minutes instead of 30 seconds (saves 90% reads)
+    const interval = setInterval(fetchSensorHealth, 300000);
     return () => clearInterval(interval);
   }, []);
 
   const fetchSensorHealth = async () => {
     try {
+      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+      
       // Fetch stats
-      const statsResponse = await fetch('http://localhost:8080/api/sensor-health/stats');
+      const statsResponse = await fetch(`${API_BASE}/api/sensor-health/stats`);
       if (statsResponse.ok) {
         const statsData = await statsResponse.json();
         setStats(statsData);
       }
 
       // Fetch detailed health from Firebase
-      const healthResponse = await fetch('http://localhost:8080/api/sensor-health/all-details');
+      const healthResponse = await fetch(`${API_BASE}/api/sensor-health/all-details`);
       if (healthResponse.ok) {
         const healthData = await healthResponse.json();
         setDetails(healthData);

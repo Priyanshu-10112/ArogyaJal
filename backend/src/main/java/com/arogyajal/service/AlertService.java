@@ -417,4 +417,54 @@ public class AlertService {
             return 0;
         }
     }
+    
+    public List<Alert> getAlertsByState(String state) {
+        log.info("Retrieving alerts for state: {}", state);
+        try {
+            return alertRepository.findAll().stream()
+                .filter(alert -> alert.getLocation() != null && 
+                        alert.getLocation().toLowerCase().contains(state.toLowerCase()))
+                .sorted((a, b) -> {
+                    if (a.getTriggeredAt() == null) return 1;
+                    if (b.getTriggeredAt() == null) return -1;
+                    return b.getTriggeredAt().compareTo(a.getTriggeredAt());
+                })
+                .toList();
+        } catch (Exception e) {
+            log.error("Error retrieving alerts for state: " + state, e);
+            return new ArrayList<>();
+        }
+    }
+    
+    public List<Alert> getAlertsByType(String type) {
+        log.info("Retrieving alerts of type: {}", type);
+        try {
+            return alertRepository.findAll().stream()
+                .filter(alert -> type.equalsIgnoreCase(alert.getAlertType()))
+                .sorted((a, b) -> {
+                    if (a.getTriggeredAt() == null) return 1;
+                    if (b.getTriggeredAt() == null) return -1;
+                    return b.getTriggeredAt().compareTo(a.getTriggeredAt());
+                })
+                .toList();
+        } catch (Exception e) {
+            log.error("Error retrieving alerts of type: " + type, e);
+            return new ArrayList<>();
+        }
+    }
+    
+    public int bulkAcknowledgeAlerts(List<String> alertIds, String userId) {
+        log.info("Bulk acknowledging {} alerts by user {}", alertIds.size(), userId);
+        int successCount = 0;
+        for (String alertId : alertIds) {
+            try {
+                acknowledgeAlert(alertId, userId);
+                successCount++;
+            } catch (Exception e) {
+                log.error("Error acknowledging alert {}: {}", alertId, e.getMessage());
+            }
+        }
+        log.info("Bulk acknowledge complete: {}/{} successful", successCount, alertIds.size());
+        return successCount;
+    }
 }

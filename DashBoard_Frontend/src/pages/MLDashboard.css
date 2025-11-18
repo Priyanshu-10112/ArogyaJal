@@ -219,6 +219,11 @@
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
 }
 
+.status-dot.offline {
+  background: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
   .dashboard-grid {

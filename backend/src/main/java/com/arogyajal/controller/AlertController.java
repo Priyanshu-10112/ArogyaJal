@@ -17,7 +17,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/alerts")
-@Tag(name = "Alert API", description = "APIs for managing system alerts and notifications")
+@Tag(name = "Alert API", description = "APIs for water quality alerts and outbreak notifications - NER Region")
 public class AlertController {
 
     private static final Logger log = LoggerFactory.getLogger(AlertController.class);
@@ -197,6 +197,59 @@ public class AlertController {
             return ResponseEntity.status(HttpStatus.CREATED).body(createdAlert);
         } catch (Exception e) {
             log.error("Error creating alert", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @GetMapping("/state/{state}")
+    @Operation(summary = "Get alerts by NER state", 
+              description = "Filter alerts by North East India state (Assam, Meghalaya, etc.)")
+    public ResponseEntity<List<Alert>> getAlertsByState(
+            @Parameter(description = "State name") @PathVariable String state) {
+        log.info("Retrieving alerts for state: {}", state);
+        try {
+            List<Alert> alerts = alertService.getAlertsByState(state);
+            return ResponseEntity.ok(alerts);
+        } catch (Exception e) {
+            log.error("Error retrieving alerts for state: {}", state, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @GetMapping("/type/{type}")
+    @Operation(summary = "Get alerts by type", 
+              description = "Filter alerts by type (WATER_QUALITY, OUTBREAK, SENSOR_FAILURE)")
+    public ResponseEntity<List<Alert>> getAlertsByType(
+            @Parameter(description = "Alert type") @PathVariable String type) {
+        log.info("Retrieving alerts of type: {}", type);
+        try {
+            List<Alert> alerts = alertService.getAlertsByType(type.toUpperCase());
+            return ResponseEntity.ok(alerts);
+        } catch (Exception e) {
+            log.error("Error retrieving alerts of type: {}", type, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @PostMapping("/bulk/acknowledge")
+    @Operation(summary = "Bulk acknowledge alerts", 
+              description = "Acknowledge multiple alerts at once")
+    public ResponseEntity<Map<String, Object>> bulkAcknowledgeAlerts(
+            @RequestBody Map<String, Object> request) {
+        @SuppressWarnings("unchecked")
+        List<String> alertIds = (List<String>) request.get("alertIds");
+        String userId = (String) request.getOrDefault("userId", "system");
+        log.info("Bulk acknowledging {} alerts by user {}", alertIds.size(), userId);
+        try {
+            int successCount = alertService.bulkAcknowledgeAlerts(alertIds, userId);
+            Map<String, Object> response = Map.of(
+                "status", "success",
+                "totalRequested", alertIds.size(),
+                "successfullyAcknowledged", successCount
+            );
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error bulk acknowledging alerts", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

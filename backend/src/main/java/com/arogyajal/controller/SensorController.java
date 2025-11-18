@@ -16,37 +16,11 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
-/**
- * Response class for sensor statistics
- */
-@lombok.Data
-class SensorStatisticsResponse {
-    private long totalReadings;
-    private List<String> deviceIds = new ArrayList<>();
-    private List<String> locations = new ArrayList<>();
-	public long getTotalReadings() {
-		return totalReadings;
-	}
-	public void setTotalReadings(long totalReadings) {
-		this.totalReadings = totalReadings;
-	}
-	public List<String> getDeviceIds() {
-		return deviceIds;
-	}
-	public void setDeviceIds(List<String> deviceIds) {
-		this.deviceIds = deviceIds;
-	}
-	public List<String> getLocations() {
-		return locations;
-	}
-	public void setLocations(List<String> locations) {
-		this.locations = locations;
-	}
-}
+
 
 @RestController
 @RequestMapping("/api")
-@Tag(name = "Sensor Data API", description = "APIs for handling sensor data")
+@Tag(name = "Sensor Data API", description = "APIs for IoT sensor data from North East India water sources")
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:8081"}, 
            allowedHeaders = "*", 
            allowCredentials = "true")
@@ -355,6 +329,44 @@ public class SensorController {
         } catch (Exception e) {
             log.error("Error retrieving critical readings: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @GetMapping("/sensor-data/readings/state/{state}")
+    @Operation(summary = "Get readings by NER state", 
+              description = "Filter sensor readings by North East India state (Assam, Meghalaya, etc.)")
+    public ResponseEntity<List<SensorReading>> getReadingsByState(
+            @Parameter(description = "State name") @PathVariable String state) {
+        log.info("Retrieving readings for state: {}", state);
+        try {
+            List<SensorReading> readings = sensorService.getReadingsByState(state);
+            return ResponseEntity.ok(readings);
+        } catch (Exception e) {
+            log.error("Error retrieving readings for state {}: {}", state, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @PostMapping("/sensor-data/bulk")
+    @Operation(summary = "Bulk sensor data ingestion", 
+              description = "Submit multiple sensor readings at once")
+    public ResponseEntity<Map<String, Object>> receiveBulkSensorData(
+            @Valid @RequestBody List<SensorData> sensorDataList) {
+        log.info("Received bulk sensor data: {} readings", sensorDataList.size());
+        try {
+            int successCount = sensorService.processBulkSensorData(sensorDataList);
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "Bulk data processed");
+            response.put("totalReceived", sensorDataList.size());
+            response.put("successfullyProcessed", successCount);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error processing bulk sensor data: {}", e.getMessage(), e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", "Failed to process bulk data: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(errorResponse);
         }
     }
     

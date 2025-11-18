@@ -419,7 +419,10 @@ const Trends: React.FC = () => {
   return (
     <div className="page-content">
       <div style={{ marginBottom: '30px' }}>
-        <h1 style={{ marginBottom: '20px' }}>Water Quality Trends</h1>
+        <h1 style={{ marginBottom: '10px' }}>Water Quality Trends - North East India</h1>
+        <p style={{ margin: '0 0 20px 0', color: '#6b7280', fontSize: '14px' }}>
+          Historical analysis and forecasting for NER region
+        </p>
 
         {/* Controls */}
         <div style={{

@@ -182,7 +182,10 @@ const AlertsPage: React.FC = () => {
   return (
     <div className="page-content">
       <div style={{ marginBottom: '30px' }}>
-        <h1 style={{ marginBottom: '20px' }}>System Alerts & Notifications</h1>
+        <h1 style={{ marginBottom: '10px' }}>System Alerts & Notifications - NER</h1>
+        <p style={{ margin: '0 0 20px 0', color: '#6b7280', fontSize: '14px' }}>
+          Water quality alerts across North East India region
+        </p>
 
         {/* Statistics Cards */}
         {stats && (

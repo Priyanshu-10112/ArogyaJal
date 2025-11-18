@@ -2,10 +2,16 @@ package com.arogyajal.controller;
 
 import com.arogyajal.model.SymptomCluster;
 import com.arogyajal.service.SymptomClusterService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,7 +26,12 @@ import java.util.Map;
            allowCredentials = "true")
 public class SymptomClusterController {
 
+    private static final Logger log = LoggerFactory.getLogger(SymptomClusterController.class);
+    
     private final SymptomClusterService clusterService;
+    
+    @Autowired
+    private RestTemplate restTemplate;
 
     public SymptomClusterController(SymptomClusterService clusterService) {
         this.clusterService = clusterService;
@@ -92,17 +103,74 @@ public class SymptomClusterController {
     }
 
     /**
-     * Get active clusters
+     * Get active clusters from ML service
      * GET /api/clusters/active
+     * Fetches real-time clusters from ML clustering analysis
      */
     @GetMapping("/active")
     public ResponseEntity<?> getActiveClusters() {
+        log.info("Fetching active clusters for map display");
+        
         try {
-            List<SymptomCluster> clusters = clusterService.getActiveClusters();
-            return ResponseEntity.ok(clusters);
+            // Get clusters from ML service via symptom-clusters endpoint
+            String mlUrl = "http://localhost:8080/api/symptom-clusters";
+            ResponseEntity<Map> response = restTemplate.getForEntity(mlUrl, Map.class);
+            Map<String, Object> clusterData = response.getBody();
+            
+            if (clusterData == null || !clusterData.containsKey("clusters")) {
+                return ResponseEntity.ok(new ArrayList<>());
+            }
+            
+            List<Map<String, Object>> mlClusters = (List<Map<String, Object>>) clusterData.get("clusters");
+            List<Map<String, Object>> transformedClusters = new ArrayList<>();
+            
+            for (Map<String, Object> cluster : mlClusters) {
+                Map<String, Object> transformed = new HashMap<>();
+                
+                // Extract centroid
+                Map<String, Object> centroid = (Map<String, Object>) cluster.get("centroid");
+                double lat = ((Number) centroid.get("lat")).doubleValue();
+                double lon = ((Number) centroid.get("lon")).doubleValue();
+                
+                // Get first report location as cluster location name
+                List<Map<String, Object>> reports = (List<Map<String, Object>>) cluster.get("reports");
+                String location = reports.isEmpty() ? "Unknown" : (String) reports.get(0).get("location");
+                
+                // Determine severity based on cluster score
+                int score = ((Number) cluster.get("cluster_score")).intValue();
+                String severity;
+                if (score >= 75) {
+                    severity = "HIGH";
+                } else if (score >= 50) {
+                    severity = "MODERATE";
+                } else {
+                    severity = "LOW";
+                }
+                
+                transformed.put("id", cluster.get("cluster_id"));
+                transformed.put("latitude", lat);
+                transformed.put("longitude", lon);
+                transformed.put("location", location);
+                transformed.put("reportCount", cluster.get("report_count"));
+                transformed.put("overallSeverity", severity);
+                transformed.put("status", "ACTIVE");
+                transformed.put("clusterScore", score);
+                
+                transformedClusters.add(transformed);
+            }
+            
+            log.info("Transformed {} clusters for map display", transformedClusters.size());
+            return ResponseEntity.ok(transformedClusters);
+            
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Failed to retrieve active clusters: " + e.getMessage()));
+            log.error("Error fetching active clusters from ML service", e);
+            // Fallback to database clusters if ML service fails
+            try {
+                List<SymptomCluster> clusters = clusterService.getActiveClusters();
+                return ResponseEntity.ok(clusters);
+            } catch (Exception ex) {
+                return ResponseEntity.ok(new ArrayList<>());
+            }
         }
     }
 

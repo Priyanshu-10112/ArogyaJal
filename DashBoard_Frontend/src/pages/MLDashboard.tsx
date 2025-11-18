@@ -27,6 +27,7 @@ interface DashboardStats {
 
 const MLDashboard: React.FC = () => {
   const [sensors, setSensors] = useState<SensorReading[]>([]);
+  const [mlServiceOnline, setMlServiceOnline] = useState<boolean>(false);
   const [stats, setStats] = useState<DashboardStats>({
     totalSensors: 0,
     activeSensors: 0,
@@ -44,9 +45,23 @@ const MLDashboard: React.FC = () => {
 
   const fetchDashboardData = async () => {
     try {
+      // Check ML Service status
+      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+      const ML_API_BASE = process.env.REACT_APP_ML_API_URL || 'http://localhost:5000';
+      
+      try {
+        const mlResponse = await fetch(`${ML_API_BASE}/health`, { 
+          method: 'GET',
+          signal: AbortSignal.timeout(2000) // 2 second timeout
+        });
+        setMlServiceOnline(mlResponse.ok);
+      } catch (err) {
+        setMlServiceOnline(false);
+      }
+
       // Fetch sensors
       try {
-        const sensorsResponse = await fetch('http://localhost:8080/api/sensors/readings');
+        const sensorsResponse = await fetch(`${API_BASE}/api/sensors/readings`);
         if (sensorsResponse.ok) {
           const sensorsData = await sensorsResponse.json();
           setSensors(Array.isArray(sensorsData) ? sensorsData : []);
@@ -57,7 +72,7 @@ const MLDashboard: React.FC = () => {
 
       // Fetch stats
       try {
-        const statsResponse = await fetch('http://localhost:8080/api/dashboard/stats');
+        const statsResponse = await fetch(`${API_BASE}/api/dashboard/stats`);
         if (statsResponse.ok) {
           const statsData = await statsResponse.json();
           setStats(statsData);
@@ -84,8 +99,11 @@ const MLDashboard: React.FC = () => {
     <div className="ml-dashboard">
       {/* Header */}
       <div className="dashboard-header">
-        <h1>ArogyaJal ML Dashboard</h1>
-        <p>Real-time Water Quality & Outbreak Monitoring</p>
+        <h1>ArogyaJal ML Dashboard - North East India</h1>
+        <p>Real-time Water Quality & Outbreak Monitoring for NER States</p>
+        <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '5px' }}>
+          🗺️ Covering: Assam • Meghalaya • Arunachal Pradesh • Nagaland • Manipur • Mizoram • Tripura • Sikkim
+        </p>
       </div>
 
       {/* Stats Cards */}
@@ -197,7 +215,7 @@ const MLDashboard: React.FC = () => {
       {/* Footer */}
       <div className="dashboard-footer">
         <p>Last updated: {new Date().toLocaleString()}</p>
-        <p>ML Service: <span className="status-dot online"></span> Online</p>
+        <p>ML Service: <span className={`status-dot ${mlServiceOnline ? 'online' : 'offline'}`}></span> {mlServiceOnline ? 'Online' : 'Offline'}</p>
       </div>
     </div>
   );

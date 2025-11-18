@@ -25,8 +25,10 @@ const OutbreakPredictionPanel: React.FC = () => {
   }, []);
 
   const fetchOutbreakPrediction = async () => {
+    const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+    
     try {
-      const response = await fetch('http://localhost:8080/api/outbreak-predictions/latest');
+      const response = await fetch(`${API_BASE}/api/outbreak-predictions/latest`);
       if (response.ok) {
         const data = await response.json();
         

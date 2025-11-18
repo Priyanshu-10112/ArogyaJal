@@ -4,11 +4,10 @@ import SensorHealthWidget from '../components/SensorHealthWidget';
 import '../App.css';
 import { 
   testFirebaseConnection,
-  subscribeToDeviceUpdates,
   type SensorReadingDocument
 } from '../services/firebase.service';
 import { initializeApp } from 'firebase/app';
-import { collection, query, orderBy, limit, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import { firebaseConfig, COLLECTIONS } from '../config/firebase.config';
 
@@ -52,11 +51,9 @@ const Dashboard: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Available devices state (commented out as it's not currently used)
-  // const [availableDevices, setAvailableDevices] = useState<string[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [currentTime, setCurrentTime] = useState<string>('');
+  const [selectedState, setSelectedState] = useState<string>('ALL');
 
   // Transform Firestore document to DashboardData format
   const transformToDashboardData = useCallback((doc: SensorReadingDocument | null): DashboardData => {
@@ -233,7 +230,6 @@ const Dashboard: React.FC = () => {
         if (isMounted && !querySnapshot.empty) {
           const latestDoc = querySnapshot.docs[0].data() as SensorReadingDocument;
           if (latestDoc.sensorId) {
-            setSelectedDeviceId(latestDoc.sensorId);
             setDashboardData(transformToDashboardData(latestDoc));
           }
         }
@@ -254,106 +250,87 @@ const Dashboard: React.FC = () => {
     };
   }, [transformToDashboardData]);
 
-  // Set up real-time updates for the latest device
+  // OPTIMIZED: Set up polling instead of real-time listeners (reduces Firestore reads by 95%)
   useEffect(() => {
     let isMounted = true;
-    let unsubscribeDeviceData: (() => void) | null = null;
-    let unsubscribeLatestDevice: (() => void) | null = null;
+    let pollingInterval: NodeJS.Timeout;
 
-    const setupRealtimeUpdates = async () => {
+    const fetchLatestData = async () => {
       try {
+        if (!isMounted) return;
+        
         setIsLoading(true);
         
-        // First, set up a listener for the latest device ID
-        const latestDeviceQuery = query(
-          collection(db, COLLECTIONS.SENSOR_READINGS),
-          orderBy('timestamp', 'desc'),
-          limit(1)
-        );
-
-        // Get the latest device ID and set up a real-time listener
-        const querySnapshot = await getDocs(latestDeviceQuery);
-        if (!querySnapshot.empty) {
-          const latestDoc = querySnapshot.docs[0].data() as SensorReadingDocument;
-          if (isMounted && latestDoc.sensorId) {
-            setSelectedDeviceId(latestDoc.sensorId);
-            
-            // Set up real-time subscription for this device's data
-            unsubscribeDeviceData = subscribeToDeviceUpdates(latestDoc.sensorId, (doc) => {
-              if (isMounted && doc) {
-                const newData = transformToDashboardData(doc);
-                setDashboardData({
-                  ...newData,
-                  deviceId: latestDoc.sensorId
-                });
-                setIsLoading(false);
-                setError(null);
-              }
-            });
-          }
-        }
+        // Fetch latest device data with state filter
+        let latestDeviceQuery;
         
-        // Set up a real-time listener for any new device data
-        unsubscribeLatestDevice = onSnapshot(
-          query(
+        if (selectedState === 'ALL') {
+          latestDeviceQuery = query(
             collection(db, COLLECTIONS.SENSOR_READINGS),
             orderBy('timestamp', 'desc'),
             limit(1)
-          ),
-          (snapshot) => {
-            if (!snapshot.empty && isMounted) {
-              const latestDoc = snapshot.docs[0].data() as SensorReadingDocument;
-              if (latestDoc.sensorId !== selectedDeviceId) {
-                // If we get a new device ID, update the selected device
-                setSelectedDeviceId(latestDoc.sensorId);
-                
-                // Unsubscribe from the previous device's updates
-                if (unsubscribeDeviceData) {
-                  unsubscribeDeviceData();
-                }
-                
-                // Subscribe to the new device's updates
-                unsubscribeDeviceData = subscribeToDeviceUpdates(latestDoc.sensorId, (doc) => {
-                  if (isMounted && doc) {
-                    const newData = transformToDashboardData(doc);
-                    setDashboardData({
-                      ...newData,
-                      deviceId: latestDoc.sensorId
-                    });
-                    setIsLoading(false);
-                    setError(null);
-                  }
-                });
+          );
+        } else {
+          // Filter by state in location field
+          latestDeviceQuery = query(
+            collection(db, COLLECTIONS.SENSOR_READINGS),
+            orderBy('timestamp', 'desc'),
+            limit(10) // Get more to filter by state
+          );
+        }
+
+        const querySnapshot = await getDocs(latestDeviceQuery);
+        if (!querySnapshot.empty && isMounted) {
+          let latestDoc: SensorReadingDocument | null = null;
+          
+          if (selectedState === 'ALL') {
+            latestDoc = querySnapshot.docs[0].data() as SensorReadingDocument;
+          } else {
+            // Filter by state
+            for (const doc of querySnapshot.docs) {
+              const data = doc.data() as SensorReadingDocument;
+              if (data.location && data.location.toLowerCase().includes(selectedState.toLowerCase())) {
+                latestDoc = data;
+                break;
               }
             }
-          },
-          (error) => {
-            console.error('Error in latest device listener:', error);
-            if (isMounted) {
-              setError('Error receiving real-time updates');
-              setIsLoading(false);
-            }
           }
-        );
+          
+          if (latestDoc && latestDoc.sensorId) {
+            const newData = transformToDashboardData(latestDoc);
+            setDashboardData({
+              ...newData,
+              deviceId: latestDoc.sensorId
+            });
+            setIsLoading(false);
+            setError(null);
+          } else if (selectedState !== 'ALL') {
+            setError(`No sensor data available for ${selectedState}`);
+            setIsLoading(false);
+          }
+        }
         
       } catch (err) {
         if (isMounted) {
           setError(err instanceof Error ? err.message : 'Failed to load data');
-          console.error('Error setting up real-time updates:', err);
+          console.error('Error fetching data:', err);
           setIsLoading(false);
         }
       }
     };
     
-    setupRealtimeUpdates();
+    // Initial fetch
+    fetchLatestData();
     
-    // Clean up subscriptions on unmount
+    // OPTIMIZED: Poll every 10 seconds for near real-time monitoring
+    pollingInterval = setInterval(fetchLatestData, 10000);
+    
+    // Clean up polling on unmount
     return () => {
       isMounted = false;
-      if (unsubscribeDeviceData) unsubscribeDeviceData();
-      if (unsubscribeLatestDevice) unsubscribeLatestDevice();
+      clearInterval(pollingInterval);
     };
-  }, [transformToDashboardData, selectedDeviceId]);
+  }, [transformToDashboardData, selectedState]);
 
   // Removed unused timer effect and state
 
@@ -495,13 +472,43 @@ const Dashboard: React.FC = () => {
       {/* Header Section */}
       <div className="dashboard-header">
         <div className="header-left">
-          <h1>🌊 ArogyaJal Water Quality Monitor</h1>
+          <h1>🌊 ArogyaJal - North East India Water Quality Monitor</h1>
+          <p style={{ margin: '5px 0 10px 0', color: '#6b7280', fontSize: '14px' }}>
+            Serving the Eight Sister States & Sikkim
+          </p>
           <div className="realtime-indicator">
             <div className="pulse"></div>
             <span>Live Monitoring</span>
           </div>
         </div>
         <div className="header-right">
+          <div className="state-filter">
+            <label htmlFor="state-select">Filter by State:</label>
+            <select 
+              id="state-select"
+              value={selectedState} 
+              onChange={(e) => setSelectedState(e.target.value)}
+              style={{
+                padding: '0.5rem',
+                borderRadius: '6px',
+                border: '1px solid rgba(255,255,255,0.3)',
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                fontSize: '0.9rem',
+                cursor: 'pointer'
+              }}
+            >
+              <option value="ALL">All States</option>
+              <option value="Assam">Assam</option>
+              <option value="Meghalaya">Meghalaya</option>
+              <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+              <option value="Nagaland">Nagaland</option>
+              <option value="Manipur">Manipur</option>
+              <option value="Mizoram">Mizoram</option>
+              <option value="Tripura">Tripura</option>
+              <option value="Sikkim">Sikkim</option>
+            </select>
+          </div>
           <div className="current-time">
             <span className="time-label">Current Time</span>
             <span className="time-value">{currentTime}</span>
@@ -652,8 +659,8 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Sensor Health Monitoring Widget */}
-      <SensorHealthWidget />
+      {/* Sensor Health Monitoring Widget - Temporarily disabled */}
+      {/* <SensorHealthWidget /> */}
 
       <StyledJsxStyle jsx>{`
         .dashboard-header {
@@ -697,6 +704,20 @@ const Dashboard: React.FC = () => {
 
         .header-right {
           text-align: right;
+          display: flex;
+          flex-direction: column;
+          gap: 1rem;
+        }
+
+        .state-filter {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .state-filter label {
+          font-size: 0.8rem;
+          opacity: 0.8;
         }
 
         .time-label {

@@ -437,10 +437,11 @@ public class SensorService {
      */
     public List<SensorReading> getReadingsByQualityStatus(String qualityStatus) {
         try {
-            // This should be implemented based on your quality status criteria
-            // For now, return an empty list as a placeholder
             log.info("Retrieving readings with quality status: {}", qualityStatus);
-            return Collections.emptyList();
+            return sensorRepository.findAll().stream()
+                .filter(reading -> qualityStatus.equalsIgnoreCase(reading.getQualityStatus()))
+                .sorted((r1, r2) -> r2.getTimestamp().compareTo(r1.getTimestamp()))
+                .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("Error retrieving readings with quality status {}: {}", qualityStatus, e.getMessage(), e);
             throw new RuntimeException("Failed to retrieve readings by quality status", e);
@@ -452,8 +453,47 @@ public class SensorService {
      * @return List of critical sensor readings
      */
     public List<SensorReading> getCriticalReadings() {
-        // Delegate to getReadingsByQualityStatus with "CRITICAL" status
         return getReadingsByQualityStatus("CRITICAL");
+    }
+    
+    /**
+     * Get sensor readings by NER state
+     * @param state The state name (Assam, Meghalaya, etc.)
+     * @return List of sensor readings from the specified state
+     */
+    public List<SensorReading> getReadingsByState(String state) {
+        try {
+            log.info("Retrieving readings for state: {}", state);
+            return sensorRepository.findAll().stream()
+                .filter(reading -> reading.getLocation() != null && 
+                        reading.getLocation().toLowerCase().contains(state.toLowerCase()))
+                .sorted((r1, r2) -> r2.getTimestamp().compareTo(r1.getTimestamp()))
+                .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error retrieving readings for state {}: {}", state, e.getMessage(), e);
+            throw new RuntimeException("Failed to retrieve readings by state", e);
+        }
+    }
+    
+    /**
+     * Process bulk sensor data
+     * @param sensorDataList List of sensor data to process
+     * @return Number of successfully processed readings
+     */
+    @CacheEvict(value = {"sensorReadings", "sensors", "dashboard"}, allEntries = true)
+    public int processBulkSensorData(List<SensorData> sensorDataList) {
+        int successCount = 0;
+        for (SensorData sensorData : sensorDataList) {
+            try {
+                processAndSaveSensorData(sensorData);
+                successCount++;
+            } catch (Exception e) {
+                log.error("Error processing sensor data for device {}: {}", 
+                    sensorData.getDeviceId(), e.getMessage());
+            }
+        }
+        log.info("Bulk processing complete: {}/{} successful", successCount, sensorDataList.size());
+        return successCount;
     }
     
     /**

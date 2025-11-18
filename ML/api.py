@@ -309,12 +309,42 @@ def predict_outbreak():
         # Make prediction
         prediction = predict_outbreak_probability(features)
         
+        # Generate recommendations based on risk level
+        recommendations = []
+        if prediction['risk_level'] == 'CRITICAL':
+            recommendations = [
+                'PRIORITY: Immediate intervention required',
+                'PRIORITY: Deploy emergency medical teams',
+                'Activate outbreak response protocol',
+                'Issue public health advisory'
+            ]
+        elif prediction['risk_level'] == 'HIGH':
+            recommendations = [
+                'PRIORITY: Increase surveillance and monitoring',
+                'Prepare emergency response resources',
+                'Issue health advisory to community',
+                'Conduct water quality testing'
+            ]
+        elif prediction['risk_level'] == 'MEDIUM':
+            recommendations = [
+                'Continue monitoring situation closely',
+                'Increase testing frequency',
+                'Conduct preventive health education',
+                'Monitor water sources'
+            ]
+        else:
+            recommendations = [
+                'Continue routine surveillance',
+                'Maintain regular monitoring schedule'
+            ]
+        
         return jsonify({
             'status': 'success',
             'risk_score': float(prediction['risk_score']),
             'risk_level': prediction['risk_level'],
             'confidence': float(prediction['confidence']),
-            'contributing_factors': prediction['factors']
+            'contributing_factors': prediction['factors'],
+            'recommendations': recommendations
         }), 200
         
     except Exception as e:

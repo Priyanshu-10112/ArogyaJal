@@ -545,6 +545,7 @@ public class DashboardController {
      */
     @GetMapping("/stats")
     @Operation(summary = "Get dashboard statistics", description = "Get overall system statistics (cached)")
+    @Cacheable(value = "stats", key = "'dashboard'")
     public ResponseEntity<Map<String, Object>> getDashboardStats() {
         log.info("getDashboardStats endpoint called (using cache)");
         try {
@@ -561,6 +562,57 @@ public class DashboardController {
             fallback.put("activeClusters", 0);
             fallback.put("activeAlerts", 0);
             fallback.put("error", e.getMessage());
+            return ResponseEntity.ok(fallback);
+        }
+    }
+    
+    /**
+     * LEGACY: Old implementation kept for reference
+     * Now using CachedDashboardService instead
+     */
+    private ResponseEntity<Map<String, Object>> getDashboardStatsLegacy() {
+        log.info("Fetching dashboard statistics (legacy method)");
+        
+        try {
+            Map<String, Object> stats = new HashMap<>();
+            
+            // Get sensor stats
+            List<SensorReading> allReadings = sensorService.getAllSensorReadings();
+            stats.put("totalSensors", allReadings.size());
+            stats.put("activeSensors", allReadings.size());
+            
+            // Get symptom report stats
+            List<SymptomReport> allReports = symptomService.getAllSymptomReports();
+            stats.put("totalReports", allReports.size());
+            
+            // Get cluster stats
+            try {
+                org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+                org.springframework.http.ResponseEntity<java.util.List> clusterResponse = 
+                    restTemplate.getForEntity("http://localhost:8080/api/clusters/active", java.util.List.class);
+                if (clusterResponse.getStatusCode().is2xxSuccessful() && clusterResponse.getBody() != null) {
+                    stats.put("activeClusters", clusterResponse.getBody().size());
+                } else {
+                    stats.put("activeClusters", 0);
+                }
+            } catch (Exception e) {
+                log.warn("Could not fetch cluster count: {}", e.getMessage());
+                stats.put("activeClusters", 0);
+            }
+            
+            // Get alert stats
+            List<Alert> activeAlerts = alertService.getActiveAlerts();
+            stats.put("activeAlerts", activeAlerts.size());
+            
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            log.error("Error fetching dashboard stats", e);
+            Map<String, Object> fallback = new HashMap<>();
+            fallback.put("totalSensors", 0);
+            fallback.put("activeSensors", 0);
+            fallback.put("totalReports", 0);
+            fallback.put("activeClusters", 0);
+            fallback.put("activeAlerts", 0);
             return ResponseEntity.ok(fallback);
         }
     }

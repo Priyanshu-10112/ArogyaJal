@@ -31,26 +31,28 @@ const ClusterMap: React.FC = () => {
     const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
     
     try {
-      const response = await fetch(`${API_BASE}/api/symptom-clusters`);
+      // Use the /api/clusters/active endpoint which returns properly formatted data
+      const response = await fetch(`${API_BASE}/api/clusters/active`);
       if (response.ok) {
         const data = await response.json();
         
         // Transform backend response to match frontend interface
-        const transformedClusters: Cluster[] = Array.isArray(data.clusters) 
-          ? data.clusters.map((cluster: any, index: number) => ({
-              id: cluster.cluster_id || `cluster-${index}`,
+        const transformedClusters: Cluster[] = Array.isArray(data) 
+          ? data.map((cluster: any, index: number) => ({
+              id: cluster.id || `cluster-${index}`,
               location: cluster.location || 'Unknown Location',
               centroid: {
-                latitude: cluster.centroid?.latitude || cluster.latitude || 28.6139,
-                longitude: cluster.centroid?.longitude || cluster.longitude || 77.2090
+                latitude: cluster.latitude || 26.2006,
+                longitude: cluster.longitude || 92.9376
               },
-              reportCount: cluster.report_count || cluster.size || 0,
-              dominantSymptoms: cluster.dominant_symptoms || cluster.symptoms || ['No symptoms'],
-              clusterScore: cluster.risk_score || cluster.score || 0,
+              reportCount: cluster.reportCount || 0,
+              dominantSymptoms: cluster.dominantSymptoms || ['No symptoms'],
+              clusterScore: cluster.clusterScore || 0,
               status: cluster.status || 'ACTIVE'
             }))
           : [];
         
+        console.log('Transformed clusters:', transformedClusters);
         setClusters(transformedClusters);
       }
     } catch (error) {
@@ -100,9 +102,18 @@ const ClusterMap: React.FC = () => {
     );
   }
 
-  const defaultCenter: [number, number] = clusters.length > 0 
-    ? [clusters[0].centroid.latitude, clusters[0].centroid.longitude]
-    : [28.6139, 77.2090]; // Default to Delhi
+  // Calculate center point of all clusters for better map view
+  const calculateMapCenter = (): [number, number] => {
+    if (clusters.length === 0) {
+      return [26.2006, 92.9376]; // North East India center
+    }
+    
+    const avgLat = clusters.reduce((sum, c) => sum + c.centroid.latitude, 0) / clusters.length;
+    const avgLon = clusters.reduce((sum, c) => sum + c.centroid.longitude, 0) / clusters.length;
+    return [avgLat, avgLon];
+  };
+
+  const defaultCenter = calculateMapCenter();
 
   return (
     <div className="cluster-map-container">
@@ -115,7 +126,7 @@ const ClusterMap: React.FC = () => {
 
       <MapContainer
         center={defaultCenter}
-        zoom={12}
+        zoom={7}
         style={{ height: '500px', width: '100%', borderRadius: '8px' }}
       >
         <TileLayer

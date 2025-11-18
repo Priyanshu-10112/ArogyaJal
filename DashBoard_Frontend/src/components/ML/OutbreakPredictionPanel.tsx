@@ -32,20 +32,23 @@ const OutbreakPredictionPanel: React.FC = () => {
       if (response.ok) {
         const data = await response.json();
         
+        console.log('Outbreak prediction data:', data);
+        
         // Transform backend response to match frontend interface
         const transformedData: OutbreakPrediction = {
           riskScore: data.risk_score || 0,
-          riskLevel: data.outbreak_risk || 'LOW',
+          riskLevel: data.risk_level || data.outbreak_risk || 'LOW',  // Fixed: use risk_level first
           confidence: data.confidence || 0,
           contributingFactors: {
-            cluster_factor: data.risk_factors?.cluster_factor || 0,
-            report_factor: data.risk_factors?.report_factor || 0,
-            quality_factor: data.risk_factors?.quality_factor || 0,
-            water_factor: data.risk_factors?.water_factor || 0
+            cluster_factor: data.contributing_factors?.cluster_factor || data.risk_factors?.cluster_factor || 0,
+            report_factor: data.contributing_factors?.report_factor || data.risk_factors?.report_factor || 0,
+            quality_factor: data.contributing_factors?.quality_factor || data.risk_factors?.quality_factor || 0,
+            water_factor: data.contributing_factors?.water_factor || data.risk_factors?.water_factor || 0
           },
           recommendations: data.recommendations || ['No specific recommendations at this time']
         };
         
+        console.log('Transformed prediction:', transformedData);
         setPrediction(transformedData);
       }
     } catch (error) {

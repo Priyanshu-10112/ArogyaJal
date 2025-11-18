@@ -30,15 +30,18 @@ public class CachedDashboardService {
     private final SymptomService symptomService;
     private final AlertService alertService;
     private final SymptomClusterService clusterService;
+    private final org.springframework.web.client.RestTemplate restTemplate;
     
     public CachedDashboardService(SensorService sensorService, 
                                   SymptomService symptomService,
                                   AlertService alertService,
-                                  SymptomClusterService clusterService) {
+                                  SymptomClusterService clusterService,
+                                  org.springframework.web.client.RestTemplate restTemplate) {
         this.sensorService = sensorService;
         this.symptomService = symptomService;
         this.alertService = alertService;
         this.clusterService = clusterService;
+        this.restTemplate = restTemplate;
     }
     
     /**
@@ -65,12 +68,18 @@ public class CachedDashboardService {
             long reportCount = symptomService.getReportCount();
             stats.put("totalReports", reportCount);
             
-            // Count clusters (1 read)
+            // Count clusters from ML service (not Firestore)
             int activeClusters = 0;
             try {
-                activeClusters = clusterService.getActiveClusters().size();
+                // Fetch from ML-generated clusters, not Firestore
+                org.springframework.http.ResponseEntity<java.util.List> clusterResponse = 
+                    restTemplate.getForEntity("http://localhost:8080/api/clusters/active", java.util.List.class);
+                if (clusterResponse.getStatusCode().is2xxSuccessful() && clusterResponse.getBody() != null) {
+                    activeClusters = clusterResponse.getBody().size();
+                    log.info("Fetched {} active clusters from ML service", activeClusters);
+                }
             } catch (Exception e) {
-                log.warn("Error getting clusters: {}", e.getMessage());
+                log.warn("Error getting clusters from ML service: {}", e.getMessage());
             }
             stats.put("activeClusters", activeClusters);
             

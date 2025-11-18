@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.CacheManager;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -36,10 +37,12 @@ public class MLController {
     
     private final RestTemplate restTemplate;
     private final SymptomService symptomService;
+    private final CacheManager cacheManager;
     
-    public MLController(RestTemplate restTemplate, SymptomService symptomService) {
+    public MLController(RestTemplate restTemplate, SymptomService symptomService, CacheManager cacheManager) {
         this.restTemplate = restTemplate;
         this.symptomService = symptomService;
+        this.cacheManager = cacheManager;
     }
     
     /**
@@ -108,6 +111,10 @@ public class MLController {
                 result.put("total_reports", reports.size());
                 log.info("Successfully clustered {} reports into {} clusters", 
                         reports.size(), result.get("cluster_count"));
+                
+                // Evict dashboard stats cache since cluster count changed
+                evictDashboardCache();
+                
                 return ResponseEntity.ok(result);
             } else {
                 log.warn("ML clustering returned non-success status");
@@ -128,7 +135,28 @@ public class MLController {
     @Operation(summary = "Trigger clustering analysis", description = "Manually trigger ML clustering analysis")
     public ResponseEntity<Map<String, Object>> triggerClustering() {
         log.info("Manual clustering analysis triggered");
-        return getSymptomClusters(); // Reuse the GET logic
+        ResponseEntity<Map<String, Object>> result = getSymptomClusters();
+        
+        // Evict dashboard cache after manual clustering
+        evictDashboardCache();
+        
+        return result;
+    }
+    
+    /**
+     * Helper method to evict dashboard cache when clusters change
+     */
+    private void evictDashboardCache() {
+        try {
+            if (cacheManager.getCache("stats") != null) {
+                // Evict both cache keys used by dashboard
+                cacheManager.getCache("stats").evict("dashboard");
+                cacheManager.getCache("stats").evict("dashboard-stats");
+                log.info("✅ Evicted dashboard stats cache after clustering");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to evict dashboard cache: {}", e.getMessage());
+        }
     }
     
     /**
@@ -150,10 +178,34 @@ public class MLController {
                 return ResponseEntity.ok(createEmptyOutbreakResponse());
             }
             
-            // ML service is available but needs data
-            // TODO: Fetch clusters, water tests, and reports from database
-            log.info("ML service available but prediction requires historical data");
-            return ResponseEntity.ok(createEmptyOutbreakResponse());
+            // Get clusters from ML service
+            ResponseEntity<Map<String, Object>> clusterResponse = getSymptomClusters();
+            Map<String, Object> clusterData = clusterResponse.getBody();
+            
+            if (clusterData == null || !clusterData.containsKey("clusters")) {
+                log.info("No cluster data available for outbreak prediction");
+                return ResponseEntity.ok(createEmptyOutbreakResponse());
+            }
+            
+            // Prepare data for ML outbreak prediction
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("clusters", clusterData.get("clusters"));
+            requestBody.put("water_tests", new ArrayList<>());
+            requestBody.put("reports", new ArrayList<>());
+            
+            String outbreakUrl = mlServiceUrl + "/api/ml/predict-outbreak";
+            log.info("Calling ML outbreak prediction at: {}", outbreakUrl);
+            
+            ResponseEntity<Map> response = restTemplate.postForEntity(outbreakUrl, requestBody, Map.class);
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> result = response.getBody();
+                log.info("Successfully predicted outbreak risk: {}", result.get("risk_level"));
+                return ResponseEntity.ok(result);
+            } else {
+                log.warn("ML outbreak prediction returned non-success status");
+                return ResponseEntity.ok(createEmptyOutbreakResponse());
+            }
             
         } catch (Exception e) {
             log.error("Error fetching outbreak predictions from ML service", e);

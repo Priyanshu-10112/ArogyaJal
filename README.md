@@ -20,7 +20,8 @@ Real-time IoT-based water quality monitoring and ML-powered disease outbreak det
 
 ```bash
 # Terminal 1 - Backend (Spring Boot)
-cd Backend
+cd backend
+# First time: Create .env file with your credentials (see Backend Configuration section)
 mvn spring-boot:run
 # Runs on http://localhost:8080
 
@@ -153,16 +154,35 @@ ArogyaJal/
 1. Create Firebase project: "arogyajal-demo2"
 2. Enable Firestore Database
 3. Generate service account key
-4. Place in `Backend/src/main/resources/firebase-service-account.json`
+4. Place in `backend/src/main/resources/firebase-service-account.json`
+
+### Security Note
+**IMPORTANT:** Never commit these files:
+- `backend/.env` - Contains all sensitive credentials
+- `backend/src/main/resources/firebase-service-account.json` - Firebase credentials
+
+Both are automatically excluded by `.gitignore`
 
 ### Backend Configuration
-```properties
-# Backend/src/main/resources/application.properties
-server.port=8080
-spring.cloud.gcp.project-id=arogyajal-demo2
-ml.python.api.url=http://localhost:5000
-app.cache.ttl=300  # 5 minutes
+
+**Create `.env` file in backend directory:**
+```bash
+# backend/.env (NEVER commit this file!)
+FIREBASE_PROJECT_ID=arogyajal-demo2
+FIREBASE_DATABASE_URL=https://arogyajal-demo2.firebaseio.com
+N8N_WEBHOOK_URL=https://your-n8n-instance.app.n8n.cloud/webhook/new-alert
+N8N_WEBHOOK_ENABLED=true
+ML_SERVICE_URL=http://localhost:5000
+SERVER_PORT=8080
+CACHE_TTL=300
+DEMO_MODE=false
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+ML_API_TIMEOUT=30000
+N8N_WEBHOOK_TIMEOUT=15000
+N8N_WEBHOOK_MIN_SEVERITY=LOW
 ```
+
+**Note:** The `.env` file is gitignored for security. Update values as needed.
 
 ### Frontend Configuration
 ```env

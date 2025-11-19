@@ -259,4 +259,22 @@ public class OutbreakPredictionController {
                     .body(Map.of("error", "Failed to archive predictions: " + e.getMessage()));
         }
     }
+    
+    /**
+     * Manually trigger outbreak alert check (for testing)
+     * POST /api/predictions/check-outbreak-alerts
+     */
+    @PostMapping("/check-outbreak-alerts")
+    public ResponseEntity<?> triggerOutbreakAlertCheck() {
+        try {
+            predictionService.checkForOutbreakAlerts();
+            return ResponseEntity.ok(Map.of(
+                    "message", "Outbreak alert check triggered successfully",
+                    "status", "completed"
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to check outbreak alerts: " + e.getMessage()));
+        }
+    }
 }

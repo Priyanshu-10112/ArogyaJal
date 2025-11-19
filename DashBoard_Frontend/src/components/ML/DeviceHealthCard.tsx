@@ -95,7 +95,7 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
       </div>
 
       {/* Water Quality */}
-      {wqi !== undefined && (
+      {wqi !== undefined && wqi !== null && (
         <div className="wqi-section">
           <div className="wqi-circle" style={{ borderColor: getWQIColor(wqi) }}>
             <div className="wqi-value">{wqi.toFixed(1)}</div>
@@ -117,7 +117,7 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
               <div className="status-label">Battery</div>
               <div className="status-value" style={{ color: getBatteryColor(batteryLevel) }}>
                 {batteryLevel}%
-                {batteryVoltage && <span className="sub-value"> ({batteryVoltage.toFixed(2)}V)</span>}
+                {batteryVoltage !== undefined && batteryVoltage !== null && <span className="sub-value"> ({batteryVoltage.toFixed(2)}V)</span>}
               </div>
             </div>
             <div className="status-bar">
@@ -169,7 +169,7 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
           ⚠️ Weak signal - check connectivity
         </div>
       )}
-      {(wqi !== undefined && wqi < 50) && (
+      {(wqi !== undefined && wqi !== null && wqi < 50) && (
         <div className="device-alert critical">
           🚨 Poor water quality detected
         </div>

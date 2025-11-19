@@ -135,21 +135,26 @@ public class SensorService {
                         );
                         
                         if (prediction.isSuccess()) {
+                            reading.setWqi(prediction.getWqi());
                             reading.setQualityStatus(prediction.getQualityStatus());
-                            log.info("ML Prediction - WQI: {}, Status: {}", prediction.getWqi(), prediction.getQualityStatus());
+                            log.info("✅ ML Prediction - WQI: {}, Status: {}", prediction.getWqi(), prediction.getQualityStatus());
                         } else {
-                            // Fallback: Calculate quality status based on parameters
+                            // Fallback: Set default values and calculate quality status
+                            reading.setWqi(50.0);
                             reading.setQualityStatus(calculateQualityStatus(reading));
-                            log.warn("ML prediction failed, using fallback calculation: {}", reading.getQualityStatus());
+                            log.warn("⚠️ ML prediction failed, using fallback - WQI: 50.0, Status: {}", reading.getQualityStatus());
                         }
                     } catch (Exception e) {
-                        log.error("Error calling ML service: {}, using fallback calculation", e.getMessage());
-                        // Fallback: Calculate quality status based on parameters
+                        log.error("❌ Error calling ML service: {}, using fallback calculation", e.getMessage());
+                        // Fallback: Set default values and calculate quality status
+                        reading.setWqi(50.0);
                         reading.setQualityStatus(calculateQualityStatus(reading));
+                        log.warn("⚠️ Fallback applied - WQI: 50.0, Status: {}", reading.getQualityStatus());
                     }
                 } else {
                     // Not enough sensors for ML prediction
-                    log.warn("Insufficient sensor data ({} sensors) for ML prediction. Setting status to UNKNOWN", availableSensors);
+                    log.warn("Insufficient sensor data ({} sensors) for ML prediction. Setting defaults", availableSensors);
+                    reading.setWqi(50.0);
                     reading.setQualityStatus("UNKNOWN");
                 }
             } else {
@@ -172,14 +177,19 @@ public class SensorService {
                 reading.setNotes("Battery Voltage: " + sensorData.getBattery().getVoltage() + "V");
             }
             
+            // Calculate overall severity based on all parameters
+            String overallSeverity = calculateOverallSeverity(reading);
+            reading.setSeverity(overallSeverity);
+            log.info("Calculated overall severity: {}", overallSeverity);
+            
             // Save to database with a generated document ID
             String documentId = UUID.randomUUID().toString();
             reading.setId(documentId);
             
             // Debug log before save
-            log.info("About to save - pH: {}, temp: {}, turbidity: {}, DO: {}, TDS: {}", 
+            log.info("About to save - pH: {}, temp: {}, turbidity: {}, DO: {}, TDS: {}, severity: {}", 
                 reading.getPh(), reading.getTemperature(), reading.getTurbidity(), 
-                reading.getDissolvedOxygen(), reading.getTotalDissolvedSolids());
+                reading.getDissolvedOxygen(), reading.getTotalDissolvedSolids(), reading.getSeverity());
             
             sensorRepository.save(reading, documentId);
             log.info("Saved sensor data for device: {} with ID: {}", deviceId, documentId);
@@ -780,5 +790,91 @@ public class SensorService {
         } else {
             return "EXCELLENT";
         }
+    }
+    
+    /**
+     * Calculate overall severity based on all available sensor parameters
+     * Uses AlertService.getSeverityForParameter for each parameter
+     * Returns the highest severity: CRITICAL > HIGH > MEDIUM > LOW
+     */
+    private String calculateOverallSeverity(SensorReading reading) {
+        String highestSeverity = "LOW";
+        int highestLevel = 0;
+        
+        // Severity hierarchy: LOW=1, MEDIUM=2, HIGH=3, CRITICAL=4
+        java.util.Map<String, Integer> severityLevels = java.util.Map.of(
+            "LOW", 1,
+            "MEDIUM", 2,
+            "HIGH", 3,
+            "CRITICAL", 4
+        );
+        
+        try {
+            // Check pH
+            if (reading.getPh() != null && reading.getPh() > 0) {
+                String severity = alertService.getSeverityForParameter("pH", reading.getPh());
+                int level = severityLevels.getOrDefault(severity, 0);
+                if (level > highestLevel) {
+                    highestLevel = level;
+                    highestSeverity = severity;
+                }
+            }
+            
+            // Check Temperature
+            if (reading.getTemperature() != null && reading.getTemperature() > 0) {
+                String severity = alertService.getSeverityForParameter("Temperature", reading.getTemperature());
+                int level = severityLevels.getOrDefault(severity, 0);
+                if (level > highestLevel) {
+                    highestLevel = level;
+                    highestSeverity = severity;
+                }
+            }
+            
+            // Check Turbidity
+            if (reading.getTurbidity() != null && reading.getTurbidity() > 0) {
+                String severity = alertService.getSeverityForParameter("Turbidity", reading.getTurbidity());
+                int level = severityLevels.getOrDefault(severity, 0);
+                if (level > highestLevel) {
+                    highestLevel = level;
+                    highestSeverity = severity;
+                }
+            }
+            
+            // Check Dissolved Oxygen
+            if (reading.getDissolvedOxygen() != null && reading.getDissolvedOxygen() > 0) {
+                String severity = alertService.getSeverityForParameter("Dissolved Oxygen", reading.getDissolvedOxygen());
+                int level = severityLevels.getOrDefault(severity, 0);
+                if (level > highestLevel) {
+                    highestLevel = level;
+                    highestSeverity = severity;
+                }
+            }
+            
+            // Check Conductivity
+            if (reading.getConductivity() != null && reading.getConductivity() > 0) {
+                String severity = alertService.getSeverityForParameter("Conductivity", reading.getConductivity());
+                int level = severityLevels.getOrDefault(severity, 0);
+                if (level > highestLevel) {
+                    highestLevel = level;
+                    highestSeverity = severity;
+                }
+            }
+            
+            // Check TDS
+            if (reading.getTotalDissolvedSolids() != null && reading.getTotalDissolvedSolids() > 0) {
+                String severity = alertService.getSeverityForParameter("TDS", reading.getTotalDissolvedSolids());
+                int level = severityLevels.getOrDefault(severity, 0);
+                if (level > highestLevel) {
+                    highestLevel = level;
+                    highestSeverity = severity;
+                }
+            }
+            
+        } catch (Exception e) {
+            log.error("Error calculating overall severity: {}", e.getMessage(), e);
+            return "MEDIUM"; // Default to MEDIUM on error
+        }
+        
+        return highestSeverity;
     }
 }

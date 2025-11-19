@@ -40,6 +40,8 @@ public class SensorReading {
     
     // Quality status
     private String qualityStatus; // GOOD, WARNING, CRITICAL
+    private Double wqi; // Water Quality Index (0-100)
+    private String severity; // Overall severity: CRITICAL, HIGH, MEDIUM, LOW
     private String notes;
     
     // Device status (IoT device health)
@@ -197,6 +199,22 @@ public class SensorReading {
         this.qualityStatus = qualityStatus;
     }
     
+    public Double getWqi() {
+        return wqi;
+    }
+    
+    public void setWqi(Double wqi) {
+        this.wqi = wqi;
+    }
+    
+    public String getSeverity() {
+        return severity;
+    }
+    
+    public void setSeverity(String severity) {
+        this.severity = severity;
+    }
+    
     public String getNotes() {
         return notes;
     }
@@ -335,6 +353,8 @@ public class SensorReading {
         private Double flowRate;
         private Timestamp timestamp = Timestamp.now();
         private String qualityStatus;
+        private Double wqi;
+        private String severity;
         private String notes;
         
         public Builder id(String id) {
@@ -412,6 +432,16 @@ public class SensorReading {
             return this;
         }
         
+        public Builder wqi(Double wqi) {
+            this.wqi = wqi;
+            return this;
+        }
+        
+        public Builder severity(String severity) {
+            this.severity = severity;
+            return this;
+        }
+        
         public Builder notes(String notes) {
             this.notes = notes;
             return this;
@@ -434,6 +464,8 @@ public class SensorReading {
             reading.setFlowRate(flowRate);
             reading.setTimestamp(timestamp);
             reading.setQualityStatus(qualityStatus);
+            reading.setWqi(wqi);
+            reading.setSeverity(severity);
             reading.setNotes(notes);
             return reading;
         }

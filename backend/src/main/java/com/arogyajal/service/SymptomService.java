@@ -81,6 +81,15 @@ public class SymptomService {
                 // Don't fail the entire operation if cluster check fails
             }
             
+            // Check for symptom spikes after saving
+            try {
+                alertService.checkForSymptomSpikeAlerts(request.getLocation());
+                log.info("Checked for symptom spikes in location: {}", request.getLocation());
+            } catch (Exception e) {
+                log.error("Error checking for symptom spikes: {}", e.getMessage(), e);
+                // Don't fail the entire operation if spike check fails
+            }
+            
             return savedReport;
         } catch (Exception e) {
             log.error("Error saving symptom report for user ID: {}", request.getUserId(), e);

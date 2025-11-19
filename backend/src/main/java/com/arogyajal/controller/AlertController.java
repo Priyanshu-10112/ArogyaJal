@@ -22,6 +22,11 @@ public class AlertController {
 
     private static final Logger log = LoggerFactory.getLogger(AlertController.class);
     private final AlertService alertService;
+    
+    // Cache for alerts (30 second TTL to reduce Firestore reads)
+    private List<Alert> cachedAlerts = null;
+    private long alertsCacheTimestamp = 0;
+    private static final long ALERTS_CACHE_TTL_MS = 30000; // 30 seconds
 
     public AlertController(AlertService alertService) {
         this.alertService = alertService;
@@ -31,8 +36,23 @@ public class AlertController {
     @Operation(summary = "Get all alerts", description = "Retrieve all alerts in the system")
     public ResponseEntity<List<Alert>> getAllAlerts() {
         log.info("Retrieving all alerts");
+        
+        // Check cache first
+        long now = System.currentTimeMillis();
+        if (cachedAlerts != null && (now - alertsCacheTimestamp) < ALERTS_CACHE_TTL_MS) {
+            log.info("✅ Returning cached alerts ({} alerts, age: {}ms)", 
+                    cachedAlerts.size(), now - alertsCacheTimestamp);
+            return ResponseEntity.ok(cachedAlerts);
+        }
+        
         try {
             List<Alert> alerts = alertService.getAllAlerts();
+            
+            // Update cache
+            cachedAlerts = alerts;
+            alertsCacheTimestamp = now;
+            
+            log.info("Fetched {} alerts from Firestore (cached for 30s)", alerts.size());
             return ResponseEntity.ok(alerts);
         } catch (Exception e) {
             log.error("Error retrieving all alerts", e);

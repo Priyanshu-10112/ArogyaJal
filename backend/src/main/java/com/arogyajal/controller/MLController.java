@@ -39,6 +39,11 @@ public class MLController {
     private final SymptomService symptomService;
     private final CacheManager cacheManager;
     
+    // Simple cache for symptom clusters (30 second TTL)
+    private Map<String, Object> cachedSymptomClusters = null;
+    private long clusterCacheTimestamp = 0;
+    private static final long CLUSTER_CACHE_TTL_MS = 30000; // 30 seconds
+    
     public MLController(RestTemplate restTemplate, SymptomService symptomService, CacheManager cacheManager) {
         this.restTemplate = restTemplate;
         this.symptomService = symptomService;
@@ -48,11 +53,19 @@ public class MLController {
     /**
      * Get symptom clusters from ML service
      * Fetches symptom reports from database and sends to ML service for clustering
+     * CACHED for 30 seconds to reduce redundant ML calls
      */
     @GetMapping("/symptom-clusters")
     @Operation(summary = "Get symptom clusters", description = "Retrieve symptom clustering analysis from ML service")
     public ResponseEntity<Map<String, Object>> getSymptomClusters() {
         log.info("Fetching symptom clusters from ML service");
+        
+        // Check cache first
+        long now = System.currentTimeMillis();
+        if (cachedSymptomClusters != null && (now - clusterCacheTimestamp) < CLUSTER_CACHE_TTL_MS) {
+            log.info("✅ Returning cached symptom clusters (age: {}ms)", now - clusterCacheTimestamp);
+            return ResponseEntity.ok(cachedSymptomClusters);
+        }
         
         try {
             // First check if ML service is available
@@ -69,7 +82,10 @@ public class MLController {
             
             if (reports.isEmpty()) {
                 log.info("No symptom reports available for clustering");
-                return ResponseEntity.ok(createEmptyClusterResponse());
+                Map<String, Object> emptyResponse = createEmptyClusterResponse();
+                cachedSymptomClusters = emptyResponse;
+                clusterCacheTimestamp = now;
+                return ResponseEntity.ok(emptyResponse);
             }
             
             log.info("Fetched {} symptom reports for clustering", reports.size());
@@ -112,29 +128,46 @@ public class MLController {
                 log.info("Successfully clustered {} reports into {} clusters", 
                         reports.size(), result.get("cluster_count"));
                 
+                // Update cache
+                cachedSymptomClusters = result;
+                clusterCacheTimestamp = now;
+                
                 // Evict dashboard stats cache since cluster count changed
                 evictDashboardCache();
                 
                 return ResponseEntity.ok(result);
             } else {
                 log.warn("ML clustering returned non-success status");
-                return ResponseEntity.ok(createEmptyClusterResponse());
+                Map<String, Object> emptyResponse = createEmptyClusterResponse();
+                cachedSymptomClusters = emptyResponse;
+                clusterCacheTimestamp = now;
+                return ResponseEntity.ok(emptyResponse);
             }
             
         } catch (Exception e) {
             log.error("Error fetching symptom clusters from ML service", e);
-            return ResponseEntity.ok(createEmptyClusterResponse());
+            Map<String, Object> emptyResponse = createEmptyClusterResponse();
+            // Cache error response too to avoid repeated failures
+            cachedSymptomClusters = emptyResponse;
+            clusterCacheTimestamp = now;
+            return ResponseEntity.ok(emptyResponse);
         }
     }
     
     /**
      * Manually trigger symptom clustering analysis
      * POST endpoint for frontend "Run ML Clustering" button
+     * Clears cache to force fresh clustering
      */
     @PostMapping("/symptom-clusters/analyze")
     @Operation(summary = "Trigger clustering analysis", description = "Manually trigger ML clustering analysis")
     public ResponseEntity<Map<String, Object>> triggerClustering() {
-        log.info("Manual clustering analysis triggered");
+        log.info("Manual clustering analysis triggered - clearing cache");
+        
+        // Clear cache to force fresh clustering
+        cachedSymptomClusters = null;
+        clusterCacheTimestamp = 0;
+        
         ResponseEntity<Map<String, Object>> result = getSymptomClusters();
         
         // Evict dashboard cache after manual clustering

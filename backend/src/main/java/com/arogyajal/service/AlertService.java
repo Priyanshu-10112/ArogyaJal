@@ -7,7 +7,14 @@ import com.arogyajal.repository.AlertRepository;
 import com.arogyajal.repository.SymptomRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 //import java.time.LocalDateTime;
 import java.util.*;
@@ -21,12 +28,26 @@ public class AlertService {
     private final AlertRepository alertRepository;
     private final SymptomRepository symptomRepository;
     private final SymptomClusterService clusterService;
+    private final RestTemplate restTemplate;
+    
+    @Value("${n8n.webhook.url}")
+    private String n8nWebhookUrl;
+    
+    @Value("${n8n.webhook.enabled:true}")
+    private boolean n8nWebhookEnabled;
+    
+    @Value("${n8n.webhook.timeout:5000}")
+    private int n8nWebhookTimeout;
+    
+    @Value("${n8n.webhook.min-severity:LOW}")
+    private String n8nMinSeverity;
 
     public AlertService(AlertRepository alertRepository, SymptomRepository symptomRepository,
-                       SymptomClusterService clusterService) {
+                       SymptomClusterService clusterService, RestTemplate restTemplate) {
         this.alertRepository = alertRepository;
         this.symptomRepository = symptomRepository;
         this.clusterService = clusterService;
+        this.restTemplate = restTemplate;
     }
     
     public Alert createAlert(Alert alert) {
@@ -35,12 +56,221 @@ public class AlertService {
         alert.setStatus("ACTIVE");
         // Generate a unique ID for the alert
         String alertId = UUID.randomUUID().toString();
+        alert.setId(alertId); // Set ID before saving
         try {
-            return alertRepository.save(alert, alertId);
+            Alert savedAlert = alertRepository.save(alert, alertId);
+            
+            // Send alert to n8n webhook asynchronously (non-blocking)
+            // Pass individual fields to avoid async proxy issues
+            sendAlertToN8N(alertId, alert.getSeverity(), alert.getLocation(), alert.getDescription(), alert.getTitle());
+            
+            return savedAlert;
         } catch (Exception e) {
             log.error("Error creating alert", e);
             throw new RuntimeException("Failed to create alert", e);
         }
+    }
+    
+    /**
+     * Send alert to n8n webhook for workflow automation
+     * This method is async to prevent blocking the main alert creation flow
+     * Accepts individual fields to avoid async proxy issues with Alert object
+     */
+    @Async
+    public void sendAlertToN8N(String alertId, String severity, String location, String description, String title) {
+        if (!n8nWebhookEnabled) {
+            log.debug("n8n webhook is disabled, skipping alert notification");
+            return;
+        }
+        
+        if (n8nWebhookUrl == null || n8nWebhookUrl.contains("your-n8n-instance")) {
+            log.debug("n8n webhook URL not configured, skipping alert notification");
+            return;
+        }
+        
+        // Filter by minimum severity level
+        if (!shouldSendToN8NSeverity(severity)) {
+            log.debug("Skipping n8n notification for {} severity alert: {} (min severity: {})", 
+                     severity, alertId, n8nMinSeverity);
+            return;
+        }
+        
+        try {
+            // Log alert details for debugging
+            log.debug("Alert details - ID: {}, Severity: {}, Location: {}, Description: {}", 
+                     alertId, severity, location, description);
+            
+            // Build message
+            String message = description != null && !description.isEmpty() 
+                ? description 
+                : buildAlertMessageFromFields(severity, title, location);
+            
+            // Build JSON payload in exact format required by n8n
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("alertId", alertId != null ? alertId : "UNKNOWN");
+            payload.put("severity", mapSeverityToN8N(severity));
+            payload.put("location", location != null ? location : "Unknown Location");
+            payload.put("message", message);
+            
+            // Log payload before sending
+            log.info("n8n Payload: alertId={}, severity={}, location={}, message={}", 
+                    payload.get("alertId"), payload.get("severity"), 
+                    payload.get("location"), payload.get("message"));
+            
+            // Set headers
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            
+            // Create request entity
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            
+            // Send POST request to n8n webhook
+            log.info("Sending alert {} to n8n webhook: {}", alertId, n8nWebhookUrl);
+            ResponseEntity<String> response = restTemplate.postForEntity(n8nWebhookUrl, request, String.class);
+            
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("✅ Successfully sent alert {} to n8n webhook", alertId);
+            } else {
+                log.warn("⚠️ n8n webhook returned non-success status: {} for alert {}", 
+                        response.getStatusCode(), alertId);
+            }
+            
+        } catch (Exception e) {
+            // Log error but don't fail the alert creation
+            log.error("❌ Failed to send alert {} to n8n webhook: {}", alertId, e.getMessage());
+            log.debug("n8n webhook error details", e);
+        }
+    }
+    
+    /**
+     * Check if alert should be sent to n8n based on severity threshold (for individual severity)
+     */
+    private boolean shouldSendToN8NSeverity(String severity) {
+        if (severity == null) {
+            return true; // Send alerts with no severity
+        }
+        
+        // Severity hierarchy: LOW < MEDIUM < HIGH < CRITICAL
+        Map<String, Integer> severityLevels = Map.of(
+            "LOW", 1,
+            "MILD", 1,
+            "MEDIUM", 2,
+            "MODERATE", 2,
+            "HIGH", 3,
+            "CRITICAL", 4
+        );
+        
+        int alertLevel = severityLevels.getOrDefault(severity.toUpperCase(), 1);
+        int minLevel = severityLevels.getOrDefault(n8nMinSeverity.toUpperCase(), 1);
+        
+        return alertLevel >= minLevel;
+    }
+    
+    /**
+     * Build alert message from individual fields
+     */
+    private String buildAlertMessageFromFields(String severity, String title, String location) {
+        StringBuilder message = new StringBuilder();
+        
+        if (severity != null) {
+            message.append(mapSeverityToN8N(severity)).append(" severity ");
+        }
+        
+        if (title != null) {
+            message.append(title);
+        } else {
+            message.append("alert");
+        }
+        
+        if (location != null) {
+            message.append(" at ").append(location);
+        }
+        
+        return message.toString();
+    }
+    
+    /**
+     * Check if alert should be sent to n8n based on severity threshold
+     */
+    private boolean shouldSendToN8N(Alert alert) {
+        if (alert.getSeverity() == null) {
+            return true; // Send alerts with no severity
+        }
+        
+        // Severity hierarchy: LOW < MEDIUM < HIGH < CRITICAL
+        Map<String, Integer> severityLevels = Map.of(
+            "LOW", 1,
+            "MILD", 1,
+            "MEDIUM", 2,
+            "MODERATE", 2,
+            "HIGH", 3,
+            "CRITICAL", 4
+        );
+        
+        int alertLevel = severityLevels.getOrDefault(alert.getSeverity().toUpperCase(), 1);
+        int minLevel = severityLevels.getOrDefault(n8nMinSeverity.toUpperCase(), 1);
+        
+        return alertLevel >= minLevel;
+    }
+    
+    /**
+     * Map internal severity levels to n8n format (lowercase)
+     */
+    private String mapSeverityToN8N(String severity) {
+        if (severity == null) {
+            return "medium";
+        }
+        
+        switch (severity.toUpperCase()) {
+            case "CRITICAL":
+                return "critical";
+            case "HIGH":
+                return "high";
+            case "MEDIUM":
+            case "MODERATE":
+                return "medium";
+            case "LOW":
+            case "MILD":
+                return "low";
+            default:
+                return "medium";
+        }
+    }
+    
+    /**
+     * Build a descriptive message for the alert
+     */
+    private String buildAlertMessage(Alert alert) {
+        if (alert.getDescription() != null && !alert.getDescription().isEmpty()) {
+            return alert.getDescription();
+        }
+        
+        // Fallback: construct message from alert details
+        StringBuilder message = new StringBuilder();
+        
+        if (alert.getSeverity() != null) {
+            message.append(mapSeverityToN8N(alert.getSeverity()))
+                   .append(" severity ");
+        }
+        
+        if (alert.getAlertType() != null) {
+            message.append(alert.getAlertType().toLowerCase().replace("_", " "))
+                   .append(" alert: ");
+        } else {
+            message.append("alert: ");
+        }
+        
+        if (alert.getTitle() != null) {
+            message.append(alert.getTitle());
+        } else {
+            message.append("Alert triggered");
+        }
+        
+        if (alert.getLocation() != null) {
+            message.append(" at ").append(alert.getLocation());
+        }
+        
+        return message.toString();
     }
     
     public List<Alert> getAllAlerts() {
@@ -248,6 +478,98 @@ public class AlertService {
         }
     }
 
+    /**
+     * Check for symptom spike alerts (24-hour rise detection)
+     * Compares current 24h report count with previous 24h period
+     * Triggers alert if increase is significant (>50% rise or >10 new reports)
+     */
+    public void checkForSymptomSpikeAlerts(String location) {
+        log.info("Checking for symptom spike alerts in location: {}", location);
+        
+        try {
+            com.google.cloud.Timestamp now = com.google.cloud.Timestamp.now();
+            com.google.cloud.Timestamp last24Hours = com.google.cloud.Timestamp.ofTimeSecondsAndNanos(
+                now.getSeconds() - (24 * 3600), 0);
+            com.google.cloud.Timestamp previous24Hours = com.google.cloud.Timestamp.ofTimeSecondsAndNanos(
+                now.getSeconds() - (48 * 3600), 0);
+            
+            // Get current 24h reports
+            List<SymptomReport> currentReports = symptomRepository
+                    .findByLocationAndReportedAtBetweenOrderByReportedAtDesc(location, last24Hours, now);
+            
+            // Get previous 24h reports
+            List<SymptomReport> previousReports = symptomRepository
+                    .findByLocationAndReportedAtBetweenOrderByReportedAtDesc(location, previous24Hours, last24Hours);
+            
+            int currentCount = currentReports.size();
+            int previousCount = previousReports.size();
+            
+            // Calculate increase
+            int absoluteIncrease = currentCount - previousCount;
+            double percentIncrease = previousCount > 0 ? 
+                ((double) absoluteIncrease / previousCount) * 100 : 0;
+            
+            log.info("Symptom spike check - Location: {}, Current: {}, Previous: {}, Increase: {}%, Absolute: {}", 
+                    location, currentCount, previousCount, String.format("%.1f", percentIncrease), absoluteIncrease);
+            
+            // Trigger alert if significant spike detected
+            boolean significantSpike = (percentIncrease >= 50 && absoluteIncrease >= 3) || absoluteIncrease >= 10;
+            
+            if (significantSpike) {
+                log.warn("⚠️ SYMPTOM SPIKE DETECTED in {}: {}% increase ({} new reports)", 
+                        location, String.format("%.1f", percentIncrease), absoluteIncrease);
+                createSymptomSpikeAlert(location, currentCount, previousCount, percentIncrease, currentReports);
+            } else {
+                log.info("✅ No significant symptom spike in {}", location);
+            }
+            
+        } catch (Exception e) {
+            log.error("Error checking for symptom spike alerts: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Create symptom spike alert
+     */
+    private void createSymptomSpikeAlert(String location, int currentCount, int previousCount, 
+                                        double percentIncrease, List<SymptomReport> reports) {
+        try {
+            // Determine severity based on spike magnitude
+            String severity;
+            if (percentIncrease >= 100 || currentCount >= 20) {
+                severity = "CRITICAL";
+            } else if (percentIncrease >= 75 || currentCount >= 15) {
+                severity = "HIGH";
+            } else {
+                severity = "MEDIUM";
+            }
+            
+            String title = String.format("Symptom Spike Alert - %s", location);
+            String description = String.format(
+                "Significant increase in symptom reports detected in %s. " +
+                "Current 24h: %d reports (up from %d, %.1f%% increase). " +
+                "Immediate investigation recommended.",
+                location, currentCount, previousCount, percentIncrease
+            );
+            
+            // Create alert
+            Alert alert = Alert.builder()
+                    .alertType("SYMPTOM_SPIKE")
+                    .severity(severity)
+                    .title(title)
+                    .description(description)
+                    .location(location)
+                    .relatedSymptomReportIds(reports.stream().map(SymptomReport::getId).toList())
+                    .build();
+            
+            createAlert(alert);
+            log.info("🚨 Created symptom spike alert for {}: {} severity", location, severity);
+            
+        } catch (Exception e) {
+            log.error("Error creating symptom spike alert: {}", e.getMessage(), e);
+        }
+    }
+
     private Alert createWaterQualityAlert(SensorReading reading, String parameter, double value) {
         try {
             String severity = getSeverityForParameter(parameter, value);
@@ -323,7 +645,7 @@ public class AlertService {
                     .reportIds(reports.stream().map(SymptomReport::getId).toList())
                     .status("ACTIVE")
                     .overallSeverity(overallSeverity)
-                    .detectionMethod("AUTOMATIC")
+                    .detectionMethod("HYBRID")  // Changed from AUTOMATIC to HYBRID (valid option)
                     .alertId(createdAlert.getId())
                     .clusterScore(clusterScore)
                     .alertGenerated(true)
@@ -339,7 +661,7 @@ public class AlertService {
         }
     }
 
-    private String getSeverityForParameter(String parameter, double value) {
+    public String getSeverityForParameter(String parameter, double value) {
         try {
             // Threshold-based severity calculation
             switch (parameter) {

@@ -1,9 +1,15 @@
 package com.arogyajal.service;
 
+import com.arogyajal.model.Alert;
 import com.arogyajal.model.OutbreakPrediction;
 import com.arogyajal.repository.OutbreakPredictionRepository;
 import com.google.cloud.Timestamp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -16,10 +22,107 @@ import java.util.stream.Collectors;
 @Service
 public class OutbreakPredictionService {
 
-    private final OutbreakPredictionRepository predictionRepository;
+    private static final Logger log = LoggerFactory.getLogger(OutbreakPredictionService.class);
 
-    public OutbreakPredictionService(OutbreakPredictionRepository predictionRepository) {
+    private final OutbreakPredictionRepository predictionRepository;
+    private final AlertService alertService;
+    private final RestTemplate restTemplate;
+    
+    @Value("${ml.service.url:http://localhost:5000}")
+    private String mlServiceUrl;
+
+    public OutbreakPredictionService(OutbreakPredictionRepository predictionRepository, 
+                                    AlertService alertService,
+                                    RestTemplate restTemplate) {
         this.predictionRepository = predictionRepository;
+        this.alertService = alertService;
+        this.restTemplate = restTemplate;
+    }
+    
+    /**
+     * Scheduled method to check for outbreak alerts
+     * Runs every hour (3600000 ms)
+     */
+    @Scheduled(fixedRate = 3600000)
+    public void checkForOutbreakAlerts() {
+        log.info("🔍 Running scheduled outbreak alert check...");
+        
+        try {
+            // Call ML service to get outbreak prediction
+            String outbreakUrl = mlServiceUrl + "/api/ml/predict-outbreak";
+            log.info("Calling ML outbreak prediction at: {}", outbreakUrl);
+            
+            // Prepare request body (empty for now, ML service will fetch data)
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("clusters", new ArrayList<>());
+            requestBody.put("water_tests", new ArrayList<>());
+            requestBody.put("reports", new ArrayList<>());
+            
+            // Call ML service
+            Map response = restTemplate.postForObject(outbreakUrl, requestBody, Map.class);
+            
+            if (response != null) {
+                String outbreakRisk = (String) response.getOrDefault("outbreak_risk", "LOW");
+                Object riskScoreObj = response.get("risk_score");
+                double riskScore = riskScoreObj instanceof Number ? ((Number) riskScoreObj).doubleValue() : 0.0;
+                
+                log.info("📊 ML Outbreak Prediction - Risk: {}, Score: {}", outbreakRisk, riskScore);
+                
+                // Create alert if risk is HIGH or CRITICAL
+                if ("HIGH".equalsIgnoreCase(outbreakRisk) || "CRITICAL".equalsIgnoreCase(outbreakRisk)) {
+                    createOutbreakAlert(outbreakRisk, riskScore, response);
+                } else {
+                    log.info("✅ Outbreak risk is {}, no alert needed", outbreakRisk);
+                }
+            } else {
+                log.warn("⚠️ ML service returned null response");
+            }
+            
+        } catch (Exception e) {
+            log.error("❌ Error checking for outbreak alerts: {}", e.getMessage(), e);
+            // Don't throw - this is a scheduled task, we don't want it to stop
+        }
+    }
+    
+    /**
+     * Create an outbreak alert based on ML prediction
+     */
+    private void createOutbreakAlert(String riskLevel, double riskScore, Map<String, Object> mlResponse) {
+        try {
+            // Extract affected locations if available
+            List<String> affectedLocations = (List<String>) mlResponse.getOrDefault("affected_locations", new ArrayList<>());
+            String location = affectedLocations.isEmpty() ? "Multiple Locations" : String.join(", ", affectedLocations);
+            
+            // Build alert title and description
+            String title = String.format("Outbreak Alert - %s Risk Detected", riskLevel);
+            String description = String.format(
+                "ML model predicts %s outbreak risk with score %.2f. Immediate attention required.",
+                riskLevel.toLowerCase(),
+                riskScore
+            );
+            
+            // Add risk factors if available
+            List<String> riskFactors = (List<String>) mlResponse.getOrDefault("risk_factors", new ArrayList<>());
+            if (!riskFactors.isEmpty()) {
+                description += " Risk factors: " + String.join(", ", riskFactors);
+            }
+            
+            // Create alert
+            Alert alert = Alert.builder()
+                    .alertType("OUTBREAK")
+                    .severity(riskLevel)
+                    .title(title)
+                    .description(description)
+                    .location(location)
+                    .status("ACTIVE")
+                    .build();
+            
+            Alert createdAlert = alertService.createAlert(alert);
+            log.info("🚨 Created outbreak alert: {} (ID: {})", title, createdAlert.getId());
+            
+        } catch (Exception e) {
+            log.error("❌ Error creating outbreak alert: {}", e.getMessage(), e);
+        }
     }
 
     /**

@@ -28,6 +28,11 @@ public class SensorController {
 
     private static final Logger log = LoggerFactory.getLogger(SensorController.class);
     private final SensorService sensorService;
+    
+    // Cache for sensor readings (30 second TTL to reduce Firestore reads)
+    private List<SensorReading> cachedReadings = null;
+    private long readingsCacheTimestamp = 0;
+    private static final long READINGS_CACHE_TTL_MS = 30000; // 30 seconds
 
     public SensorController(SensorService sensorService) {
         this.sensorService = sensorService;
@@ -36,14 +41,30 @@ public class SensorController {
     /**
      * Alias endpoint for frontend compatibility
      * Maps /api/sensors/readings to /api/sensors/sensor-data/readings
+     * CACHED for 30 seconds to reduce Firestore reads (saves quota!)
      */
     @GetMapping("/sensors/readings")
     @Operation(summary = "Get all sensor readings (alias)", 
               description = "Alias endpoint for frontend - retrieves all sensor readings")
     public ResponseEntity<List<SensorReading>> getSensorReadingsAlias() {
         log.info("Fetching all sensor readings via alias endpoint");
+        
+        // Check cache first
+        long now = System.currentTimeMillis();
+        if (cachedReadings != null && (now - readingsCacheTimestamp) < READINGS_CACHE_TTL_MS) {
+            log.info("✅ Returning cached sensor readings ({} readings, age: {}ms)", 
+                    cachedReadings.size(), now - readingsCacheTimestamp);
+            return ResponseEntity.ok(cachedReadings);
+        }
+        
         try {
             List<SensorReading> readings = sensorService.getAllSensorReadings();
+            
+            // Update cache
+            cachedReadings = readings;
+            readingsCacheTimestamp = now;
+            
+            log.info("Fetched {} sensor readings from Firestore (cached for 30s)", readings.size());
             return ResponseEntity.ok(readings);
         } catch (Exception e) {
             log.error("Error fetching sensor readings", e);

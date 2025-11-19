@@ -32,6 +32,11 @@ public class SymptomClusterController {
     
     @Autowired
     private RestTemplate restTemplate;
+    
+    // Simple cache for active clusters (30 second TTL)
+    private List<Map<String, Object>> cachedActiveClusters = null;
+    private long cacheTimestamp = 0;
+    private static final long CACHE_TTL_MS = 30000; // 30 seconds
 
     public SymptomClusterController(SymptomClusterService clusterService) {
         this.clusterService = clusterService;
@@ -106,10 +111,19 @@ public class SymptomClusterController {
      * Get active clusters from ML service
      * GET /api/clusters/active
      * Fetches real-time clusters from ML clustering analysis
+     * CACHED for 30 seconds to reduce redundant ML calls
      */
     @GetMapping("/active")
     public ResponseEntity<?> getActiveClusters() {
         log.info("Fetching active clusters for map display");
+        
+        // Check cache first
+        long now = System.currentTimeMillis();
+        if (cachedActiveClusters != null && (now - cacheTimestamp) < CACHE_TTL_MS) {
+            log.info("✅ Returning cached active clusters ({} clusters, age: {}ms)", 
+                    cachedActiveClusters.size(), now - cacheTimestamp);
+            return ResponseEntity.ok(cachedActiveClusters);
+        }
         
         try {
             // Get clusters from ML service via symptom-clusters endpoint
@@ -118,7 +132,9 @@ public class SymptomClusterController {
             Map<String, Object> clusterData = response.getBody();
             
             if (clusterData == null || !clusterData.containsKey("clusters")) {
-                return ResponseEntity.ok(new ArrayList<>());
+                cachedActiveClusters = new ArrayList<>();
+                cacheTimestamp = now;
+                return ResponseEntity.ok(cachedActiveClusters);
             }
             
             List<Map<String, Object>> mlClusters = (List<Map<String, Object>>) clusterData.get("clusters");
@@ -159,7 +175,11 @@ public class SymptomClusterController {
                 transformedClusters.add(transformed);
             }
             
-            log.info("Transformed {} clusters for map display", transformedClusters.size());
+            // Update cache
+            cachedActiveClusters = transformedClusters;
+            cacheTimestamp = now;
+            
+            log.info("Transformed {} clusters for map display (cached for 30s)", transformedClusters.size());
             return ResponseEntity.ok(transformedClusters);
             
         } catch (Exception e) {

@@ -125,7 +125,7 @@ const MapPage: React.FC = () => {
   // Get color based on water quality
   const getQualityColor = (sensor: SensorData): string => {
     // If WQI available, use it
-    if (sensor.wqi !== undefined) {
+    if (sensor.wqi !== undefined && sensor.wqi !== null) {
       if (sensor.wqi >= 80) return '#10b981'; // Green - Excellent
       if (sensor.wqi >= 60) return '#3b82f6'; // Blue - Good
       if (sensor.wqi >= 40) return '#f59e0b'; // Orange - Fair
@@ -324,37 +324,37 @@ const MapPage: React.FC = () => {
                     
                     <div style={{ fontSize: '13px' }}>
                       <strong>Current Readings:</strong>
-                      {sensor.wqi !== undefined && (
+                      {sensor.wqi !== undefined && sensor.wqi !== null && (
                         <div style={{ margin: '5px 0' }}>
                           💧 <strong>WQI:</strong> {sensor.wqi.toFixed(1)}
                         </div>
                       )}
-                      {sensor.temperature !== undefined && (
+                      {sensor.temperature !== undefined && sensor.temperature !== null && (
                         <div style={{ margin: '5px 0' }}>
                           🌡️ <strong>Temperature:</strong> {sensor.temperature.toFixed(1)}°C
                         </div>
                       )}
-                      {sensor.ph !== undefined && (
+                      {sensor.ph !== undefined && sensor.ph !== null && (
                         <div style={{ margin: '5px 0' }}>
                           ⚗️ <strong>pH:</strong> {sensor.ph.toFixed(2)}
                         </div>
                       )}
-                      {sensor.turbidity !== undefined && (
+                      {sensor.turbidity !== undefined && sensor.turbidity !== null && (
                         <div style={{ margin: '5px 0' }}>
                           🌫️ <strong>Turbidity:</strong> {sensor.turbidity.toFixed(2)} NTU
                         </div>
                       )}
-                      {sensor.dissolvedOxygen !== undefined && (
+                      {sensor.dissolvedOxygen !== undefined && sensor.dissolvedOxygen !== null && (
                         <div style={{ margin: '5px 0' }}>
                           💨 <strong>DO:</strong> {sensor.dissolvedOxygen.toFixed(2)} mg/L
                         </div>
                       )}
-                      {sensor.conductivity !== undefined && (
+                      {sensor.conductivity !== undefined && sensor.conductivity !== null && (
                         <div style={{ margin: '5px 0' }}>
                           ⚡ <strong>Conductivity:</strong> {sensor.conductivity.toFixed(0)} µS/cm
                         </div>
                       )}
-                      {sensor.totalDissolvedSolids !== undefined && (
+                      {sensor.totalDissolvedSolids !== undefined && sensor.totalDissolvedSolids !== null && (
                         <div style={{ margin: '5px 0' }}>
                           🧪 <strong>TDS:</strong> {sensor.totalDissolvedSolids.toFixed(0)} ppm
                         </div>

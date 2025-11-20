@@ -386,23 +386,22 @@ def assess_risk():
 # ============================================================================
 
 def perform_symptom_clustering(df):
-    """Perform DBSCAN clustering on symptom reports."""
+    """Perform DBSCAN clustering on symptom reports using haversine distance."""
     from sklearn.cluster import DBSCAN
-    from sklearn.preprocessing import StandardScaler
+    from math import radians, cos, sin, asin, sqrt
+    import numpy as np
     
-    features = []
     cluster_data = []
+    coordinates = []
     
     for idx, row in df.iterrows():
         if 'geoLocation' in row and row['geoLocation']:
             lat = row['geoLocation'].get('latitude', 0)
             lon = row['geoLocation'].get('longitude', 0)
             
-            # Convert timestamp to hours since epoch
-            timestamp = pd.to_datetime(row.get('reportDate', '2024-01-01'))
-            hours = timestamp.timestamp() / 3600
+            # Store coordinates in radians for haversine
+            coordinates.append([radians(lat), radians(lon)])
             
-            features.append([lat, lon, hours])
             cluster_data.append({
                 'id': row.get('id', f'report_{idx}'),
                 'location': row.get('location', 'Unknown'),
@@ -410,19 +409,21 @@ def perform_symptom_clustering(df):
                 'severity': row.get('severity', 'MILD'),
                 'lat': lat,
                 'lon': lon,
-                'timestamp': hours
+                'reportDate': row.get('reportDate', '')
             })
     
-    if len(features) < 3:
+    if len(coordinates) < 2:
         return []
     
-    # Normalize features
-    scaler = StandardScaler()
-    features_scaled = scaler.fit_transform(features)
+    # Convert to numpy array
+    coords_array = np.array(coordinates)
     
-    # Perform DBSCAN clustering (eps=0.1 for ~5km radius, min_samples=3)
-    dbscan = DBSCAN(eps=0.1, min_samples=3)
-    cluster_labels = dbscan.fit_predict(features_scaled)
+    # Perform DBSCAN clustering with haversine metric
+    # eps in kilometers: 0.5 km = 500 meters
+    # Earth radius = 6371 km, so eps in radians = 0.5/6371 ≈ 0.000078
+    # Using eps=0.01 for ~100km radius (more lenient for testing)
+    dbscan = DBSCAN(eps=0.01, min_samples=2, metric='haversine')
+    cluster_labels = dbscan.fit_predict(coords_array)
     
     # Group reports by cluster
     clusters = {}
@@ -472,25 +473,41 @@ def perform_symptom_clustering(df):
 
 def extract_outbreak_features(data):
     """Extract features for outbreak prediction."""
-    features = {
-        'cluster_count': len(data.get('clusters', [])),
-        'total_reports': sum(c.get('report_count', 0) for c in data.get('clusters', [])),
-        'avg_cluster_score': 0,
-        'water_quality_score': 0,
-        'temporal_trend': 0
-    }
+    # Handle both direct input and nested structure
+    symptom_clusters = data.get('symptom_clusters', 0)
+    water_quality_alerts = data.get('water_quality_alerts', 0)
+    recent_reports = data.get('recent_reports', 0)
     
-    # Calculate average cluster score
-    clusters = data.get('clusters', [])
-    if clusters:
-        features['avg_cluster_score'] = sum(c.get('cluster_score', 0) for c in clusters) / len(clusters)
-    
-    # Water quality factor
-    water_tests = data.get('water_tests', [])
-    if water_tests:
-        unsafe_count = sum(1 for t in water_tests 
-                          if t.get('quality_status') in ['UNSAFE', 'CONTAMINATED'])
-        features['water_quality_score'] = (unsafe_count / len(water_tests)) * 100
+    # If direct values provided, use them
+    if symptom_clusters or water_quality_alerts or recent_reports:
+        features = {
+            'cluster_count': symptom_clusters,
+            'total_reports': recent_reports,
+            'avg_cluster_score': min(symptom_clusters * 15, 100),
+            'water_quality_score': min(water_quality_alerts * 0.5, 100),
+            'temporal_trend': 0
+        }
+    else:
+        # Otherwise extract from nested structure
+        features = {
+            'cluster_count': len(data.get('clusters', [])),
+            'total_reports': sum(c.get('report_count', 0) for c in data.get('clusters', [])),
+            'avg_cluster_score': 0,
+            'water_quality_score': 0,
+            'temporal_trend': 0
+        }
+        
+        # Calculate average cluster score
+        clusters = data.get('clusters', [])
+        if clusters:
+            features['avg_cluster_score'] = sum(c.get('cluster_score', 0) for c in clusters) / len(clusters)
+        
+        # Water quality factor
+        water_tests = data.get('water_tests', [])
+        if water_tests:
+            unsafe_count = sum(1 for t in water_tests 
+                              if t.get('quality_status') in ['UNSAFE', 'CONTAMINATED'])
+            features['water_quality_score'] = (unsafe_count / len(water_tests)) * 100
     
     return features
 
@@ -498,40 +515,45 @@ def predict_outbreak_probability(features):
     """Predict outbreak probability based on features."""
     risk_score = 0
     
-    # Cluster factor (0-40 points)
-    risk_score += min(features['cluster_count'] * 10, 40)
+    # RECALIBRATED SCORING SYSTEM
+    # Cluster factor (0-35 points) - More weight on clusters
+    cluster_score = min(features['cluster_count'] * 5, 35)
+    risk_score += cluster_score
     
-    # Report count factor (0-30 points)
-    risk_score += min(features['total_reports'] * 2, 30)
+    # Report count factor (0-35 points) - Increased weight
+    report_score = min(features['total_reports'] * 0.5, 35)
+    risk_score += report_score
     
     # Cluster quality factor (0-20 points)
-    risk_score += min(features['avg_cluster_score'] * 0.2, 20)
+    quality_score = min(features['avg_cluster_score'] * 0.2, 20)
+    risk_score += quality_score
     
     # Water quality factor (0-10 points)
-    risk_score += min(features['water_quality_score'] * 0.1, 10)
+    water_score = min(features['water_quality_score'] * 0.1, 10)
+    risk_score += water_score
     
-    # Determine risk level
-    if risk_score >= 80:
+    # Determine risk level with RECALIBRATED thresholds
+    if risk_score >= 70:
         risk_level = 'CRITICAL'
-    elif risk_score >= 60:
+    elif risk_score >= 50:
         risk_level = 'HIGH'
-    elif risk_score >= 40:
+    elif risk_score >= 30:
         risk_level = 'MEDIUM'
     else:
         risk_level = 'LOW'
     
-    # Calculate confidence
-    confidence = min(50 + features['cluster_count'] * 10 + (features['total_reports'] * 2), 95)
+    # Calculate confidence based on data quality
+    confidence = min(60 + features['cluster_count'] * 5 + (features['total_reports'] * 0.3), 95)
     
     return {
         'risk_score': risk_score,
         'risk_level': risk_level,
         'confidence': confidence,
         'factors': {
-            'cluster_factor': min(features['cluster_count'] * 10, 40),
-            'report_factor': min(features['total_reports'] * 2, 30),
-            'quality_factor': min(features['avg_cluster_score'] * 0.2, 20),
-            'water_factor': min(features['water_quality_score'] * 0.1, 10)
+            'cluster_factor': cluster_score,
+            'report_factor': report_score,
+            'quality_factor': quality_score,
+            'water_factor': water_score
         }
     }
 

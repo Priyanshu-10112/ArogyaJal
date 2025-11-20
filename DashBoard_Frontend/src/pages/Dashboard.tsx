@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import StyledJsxStyle from '../components/StyledJsxStyle';
-import SensorHealthWidget from '../components/SensorHealthWidget';
+// import SensorHealthWidget from '../components/SensorHealthWidget'; // TODO: Add sensor health widget
 import '../App.css';
 import { 
   testFirebaseConnection,

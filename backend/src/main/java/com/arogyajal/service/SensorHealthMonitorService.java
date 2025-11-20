@@ -5,6 +5,7 @@ import com.arogyajal.model.SensorReading;
 import com.google.cloud.Timestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +22,9 @@ public class SensorHealthMonitorService {
     private static final Logger log = LoggerFactory.getLogger(SensorHealthMonitorService.class);
     
     private final AlertService alertService;
+    
+    @Value("${app.demo-mode:false}")
+    private boolean demoMode;
     
     // Track last seen timestamp for each sensor
     private final Map<String, Timestamp> lastSeenMap = new HashMap<>();
@@ -65,6 +69,12 @@ public class SensorHealthMonitorService {
      */
     @Scheduled(fixedRate = 900000)
     public void checkOfflineSensors() {
+        // Skip in demo mode to prevent Firebase quota exhaustion
+        if (demoMode) {
+            log.debug("Skipping offline sensor check (demo mode enabled)");
+            return;
+        }
+        
         log.info("Checking for offline sensors...");
         
         try {

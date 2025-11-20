@@ -30,6 +30,9 @@ public class OutbreakPredictionService {
     
     @Value("${ml.service.url:http://localhost:5000}")
     private String mlServiceUrl;
+    
+    @Value("${app.demo-mode:false}")
+    private boolean demoMode;
 
     public OutbreakPredictionService(OutbreakPredictionRepository predictionRepository, 
                                     AlertService alertService,
@@ -45,6 +48,12 @@ public class OutbreakPredictionService {
      */
     @Scheduled(fixedRate = 3600000)
     public void checkForOutbreakAlerts() {
+        // Skip in demo mode to prevent Firebase quota exhaustion
+        if (demoMode) {
+            log.debug("Skipping outbreak alert check (demo mode enabled)");
+            return;
+        }
+        
         log.info("🔍 Running scheduled outbreak alert check...");
         
         try {

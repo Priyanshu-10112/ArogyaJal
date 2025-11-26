@@ -44,6 +44,13 @@ public class Alert {
     private String actionTaken;
     private String notes;
     
+    // Smart Alert System fields
+    private String fingerprint;              // Deduplication hash
+    private Integer repeatCount;             // Number of confirmations
+    private Timestamp firstDetectedAt;       // First abnormal reading
+    private Timestamp lastConfirmedAt;       // Last confirmation
+    private Boolean isConfirmed;             // Repeat confirmation status
+    
     // Constructors
     public Alert() {
     }
@@ -263,6 +270,47 @@ public class Alert {
         this.notes = notes;
     }
 
+    // Smart Alert System getters and setters
+    public String getFingerprint() {
+        return fingerprint;
+    }
+
+    public void setFingerprint(String fingerprint) {
+        this.fingerprint = fingerprint;
+    }
+
+    public Integer getRepeatCount() {
+        return repeatCount;
+    }
+
+    public void setRepeatCount(Integer repeatCount) {
+        this.repeatCount = repeatCount;
+    }
+
+    public Timestamp getFirstDetectedAt() {
+        return firstDetectedAt;
+    }
+
+    public void setFirstDetectedAt(Timestamp firstDetectedAt) {
+        this.firstDetectedAt = firstDetectedAt;
+    }
+
+    public Timestamp getLastConfirmedAt() {
+        return lastConfirmedAt;
+    }
+
+    public void setLastConfirmedAt(Timestamp lastConfirmedAt) {
+        this.lastConfirmedAt = lastConfirmedAt;
+    }
+
+    public Boolean getIsConfirmed() {
+        return isConfirmed;
+    }
+
+    public void setIsConfirmed(Boolean isConfirmed) {
+        this.isConfirmed = isConfirmed;
+    }
+
     // Builder pattern implementation
     public static Builder builder() {
         return new Builder();
@@ -292,6 +340,13 @@ public class Alert {
         private List<String> affectedUsers = new ArrayList<>();
         private String actionTaken;
         private String notes;
+        
+        // Smart Alert System fields
+        private String fingerprint;
+        private Integer repeatCount;
+        private Timestamp firstDetectedAt;
+        private Timestamp lastConfirmedAt;
+        private Boolean isConfirmed;
 
         public Builder id(String id) {
             this.id = id;
@@ -408,6 +463,31 @@ public class Alert {
             return this;
         }
 
+        public Builder fingerprint(String fingerprint) {
+            this.fingerprint = fingerprint;
+            return this;
+        }
+
+        public Builder repeatCount(Integer repeatCount) {
+            this.repeatCount = repeatCount;
+            return this;
+        }
+
+        public Builder firstDetectedAt(Timestamp firstDetectedAt) {
+            this.firstDetectedAt = firstDetectedAt;
+            return this;
+        }
+
+        public Builder lastConfirmedAt(Timestamp lastConfirmedAt) {
+            this.lastConfirmedAt = lastConfirmedAt;
+            return this;
+        }
+
+        public Builder isConfirmed(Boolean isConfirmed) {
+            this.isConfirmed = isConfirmed;
+            return this;
+        }
+
         public Alert build() {
             Alert alert = new Alert();
             alert.setId(id);
@@ -433,6 +513,11 @@ public class Alert {
             alert.setAffectedUsers(affectedUsers);
             alert.setActionTaken(actionTaken);
             alert.setNotes(notes);
+            alert.setFingerprint(fingerprint);
+            alert.setRepeatCount(repeatCount);
+            alert.setFirstDetectedAt(firstDetectedAt);
+            alert.setLastConfirmedAt(lastConfirmedAt);
+            alert.setIsConfirmed(isConfirmed);
             return alert;
         }
     }

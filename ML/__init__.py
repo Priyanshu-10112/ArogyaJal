@@ -2,7 +2,7 @@
 ArogyaJal Water Quality Prediction Module
 
 This package provides machine learning models for predicting Water Quality Index (WQI)
-based on sensor data including pH, Temperature, TDS, Dissolved Oxygen, and Turbidity.
+based on 4 sensor readings: pH, Temperature, TDS, and Turbidity.
 """
 
 __version__ = "0.1.0"

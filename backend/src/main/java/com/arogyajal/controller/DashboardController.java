@@ -225,8 +225,8 @@ public class DashboardController {
         Map<String, List<DashboardResponse.DataPoint>> trends = new HashMap<>();
         Map<String, Double> latestValues = new HashMap<>();
         
-        // Process each parameter
-        String[] parameters = {"ph", "temperature", "turbidity", "dissolvedOxygen", "conductivity"};
+        // Process each parameter (4 sensors only - DO not available)
+        String[] parameters = {"ph", "temperature", "turbidity", "tds"};
         
         for (String param : parameters) {
             List<DashboardResponse.DataPoint> dataPoints = new ArrayList<>();
@@ -293,7 +293,7 @@ public class DashboardController {
                     latestValues.put("ph", latest.getPh());
                     latestValues.put("temperature", latest.getTemperature());
                     latestValues.put("turbidity", latest.getTurbidity());
-                    latestValues.put("dissolvedOxygen", latest.getDissolvedOxygen());
+                    latestValues.put("tds", latest.getTotalDissolvedSolids());
                 }
             }
             
@@ -330,8 +330,8 @@ public class DashboardController {
                 return reading.getTemperature();
             case "turbidity":
                 return reading.getTurbidity();
-            case "dissolvedOxygen":
-                return reading.getDissolvedOxygen();
+            case "tds":
+                return reading.getTotalDissolvedSolids();
             case "conductivity":
                 return reading.getConductivity();
             default:

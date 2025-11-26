@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Line, Pie } from 'react-chartjs-2';
+import { useGlobalFilter } from '../contexts/GlobalFilterContext';
+import { getAllowedDeviceIds } from '../utils/locationMapper';
 import '../App.css';
 import {
   Chart as ChartJS,
@@ -45,11 +47,12 @@ const PARAMETERS: ParameterConfig[] = [
   { label: 'pH Level', color: 'rgb(75, 192, 192)', unit: '', key: 'ph' },
   { label: 'Temperature', color: 'rgb(255, 99, 132)', unit: '°C', key: 'temperature' },
   { label: 'Turbidity', color: 'rgb(255, 205, 86)', unit: 'NTU', key: 'turbidity' },
-  { label: 'Dissolved Oxygen', color: 'rgb(54, 162, 235)', unit: 'mg/L', key: 'dissolvedOxygen' },
+  { label: 'Total Dissolved Solids', color: 'rgb(54, 162, 235)', unit: 'ppm', key: 'totalDissolvedSolids' },
   { label: 'Conductivity', color: 'rgb(153, 102, 255)', unit: 'μS/cm', key: 'conductivity' },
 ];
 
 const Trends: React.FC = () => {
+  const { filter, getBreadcrumb } = useGlobalFilter();
   const [trendsData, setTrendsData] = useState<TrendsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,11 +66,11 @@ const Trends: React.FC = () => {
   useEffect(() => {
     fetchDeviceIds();
     fetchAllReadings();
-  }, []);
+  }, [filter]);
 
   useEffect(() => {
     fetchTrends();
-  }, [timeRange]);
+  }, [timeRange, filter]);
 
   // Auto-refresh effect
   useEffect(() => {
@@ -83,8 +86,17 @@ const Trends: React.FC = () => {
 
   const fetchDeviceIds = async () => {
     try {
-      const ids = await getDeviceIds();
-      setDeviceIds(ids);
+      // Get allowed device IDs based on global filter
+      const allowedDeviceIds = await getAllowedDeviceIds({
+        state: filter.state,
+        district: filter.district,
+        city: filter.city,
+        village: filter.village
+      });
+      
+      // Convert Set to Array
+      const filteredIds = Array.from(allowedDeviceIds);
+      setDeviceIds(filteredIds);
     } catch (err) {
       console.error('Error fetching device IDs:', err);
     }
@@ -92,8 +104,32 @@ const Trends: React.FC = () => {
 
   const fetchAllReadings = async () => {
     try {
+      // Get allowed device IDs based on global filter
+      const allowedDeviceIds = await getAllowedDeviceIds({
+        state: filter.state,
+        district: filter.district,
+        city: filter.city,
+        village: filter.village
+      });
+      
       const readings = await getAllSensorReadings();
-      setAllReadings(readings);
+      // Filter readings based on allowed device IDs
+      const filteredReadings = readings.filter(reading => {
+        // If no filter, show all
+        if (allowedDeviceIds.size === 0 && !filter.state && !filter.district && !filter.city && !filter.village) {
+          return true;
+        }
+        // Check if device is in allowed list
+        if (allowedDeviceIds.size > 0 && !allowedDeviceIds.has(reading.sensorId)) {
+          return false;
+        }
+        // Check specific deviceId filter
+        if (filter.deviceId && reading.sensorId !== filter.deviceId) {
+          return false;
+        }
+        return true;
+      });
+      setAllReadings(filteredReadings);
     } catch (err) {
       console.error('Error fetching all readings:', err);
     }
@@ -103,6 +139,14 @@ const Trends: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      // Get allowed device IDs based on global filter
+      const allowedDeviceIds = await getAllowedDeviceIds({
+        state: filter.state,
+        district: filter.district,
+        city: filter.city,
+        village: filter.village
+      });
+      
       // Fetch all readings and transform them into trends format
       const readings = await getAllSensorReadings();
       
@@ -115,13 +159,26 @@ const Trends: React.FC = () => {
         }
       };
 
-      // Filter readings by time range
+      // Filter readings by time range AND global filter
       const now = new Date();
       const cutoffTime = new Date(now.getTime() - timeRange * 60 * 60 * 1000);
       
       const filteredReadings = readings.filter(reading => {
+        // Time range filter
         const readingTime = parseTimestamp(reading.timestamp);
-        return readingTime >= cutoffTime;
+        if (readingTime < cutoffTime) return false;
+        
+        // Global filter - Check if device is in allowed list
+        if (allowedDeviceIds.size > 0 && !allowedDeviceIds.has(reading.sensorId)) {
+          return false;
+        }
+        
+        // Global filter - Specific device
+        if (filter.deviceId && reading.sensorId !== filter.deviceId) {
+          return false;
+        }
+        
+        return true;
       });
 
       // Transform readings into trends format
@@ -151,7 +208,9 @@ const Trends: React.FC = () => {
         latestValues,
         timeRange: `${timeRange} hours`
       });
-      setAllReadings(readings);
+      
+      // Set filtered readings for pie charts
+      setAllReadings(filteredReadings);
       setLastUpdated(new Date());
     } catch (err) {
       setError('Failed to load trends data. Please check if the backend is running.');
@@ -365,10 +424,10 @@ const Trends: React.FC = () => {
           if (value < 5) return 'Clear (<5 NTU)';
           if (value <= 25) return 'Moderate (5-25 NTU)';
           return 'Cloudy (>25 NTU)';
-        case 'dissolvedOxygen':
-          if (value < 5) return 'Low (<5 mg/L)';
-          if (value <= 8) return 'Good (5-8 mg/L)';
-          return 'High (>8 mg/L)';
+        case 'totalDissolvedSolids':
+          if (value < 300) return 'Good (<300 ppm)';
+          if (value <= 600) return 'Acceptable (300-600 ppm)';
+          return 'High (>600 ppm)';
         case 'conductivity':
           if (value < 500) return 'Low (<500 μS/cm)';
           if (value <= 1500) return 'Normal (500-1500 μS/cm)';
@@ -416,12 +475,20 @@ const Trends: React.FC = () => {
     };
   };
 
+  const breadcrumb = getBreadcrumb();
+  const hasFilter = breadcrumb.length > 0;
+
   return (
     <div className="page-content">
       <div style={{ marginBottom: '30px' }}>
         <h1 style={{ marginBottom: '10px' }}>Water Quality Trends - North East India</h1>
         <p style={{ margin: '0 0 20px 0', color: '#6b7280', fontSize: '14px' }}>
           Historical analysis and forecasting for NER region
+          {hasFilter && (
+            <span style={{ marginLeft: '10px', color: '#667eea', fontWeight: '500' }}>
+              (Filtered: {breadcrumb.join(' › ')})
+            </span>
+          )}
         </p>
 
         {/* Controls */}

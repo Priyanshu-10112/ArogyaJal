@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useGlobalFilter } from '../contexts/GlobalFilterContext';
+import { coordsToLocation, getAllowedDeviceIds } from '../utils/locationMapper';
 import '../App.css';
 import {
   getAllAlerts,
@@ -20,6 +22,7 @@ interface AlertStats {
 }
 
 const AlertsPage: React.FC = () => {
+  const { filter, getBreadcrumb } = useGlobalFilter();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [filteredAlerts, setFilteredAlerts] = useState<Alert[]>([]);
   const [stats, setStats] = useState<AlertStats | null>(null);
@@ -36,7 +39,7 @@ const AlertsPage: React.FC = () => {
   useEffect(() => {
     fetchAlerts();
     fetchStatistics();
-  }, []);
+  }, [filter]);
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -56,8 +59,35 @@ const AlertsPage: React.FC = () => {
   const fetchAlerts = async () => {
     try {
       setLoading(true);
+      
+      // Get allowed device IDs based on global filter
+      const allowedDeviceIds = await getAllowedDeviceIds({
+        state: filter.state,
+        district: filter.district,
+        city: filter.city,
+        village: filter.village
+      });
+      
       const data = await getAllAlerts();
-      setAlerts(data);
+      
+      // Filter alerts based on allowed device IDs
+      const filteredData = data.filter(alert => {
+        // If no filter, show all
+        if (allowedDeviceIds.size === 0 && !filter.state && !filter.district && !filter.city && !filter.village) {
+          return true;
+        }
+        // Check if alert's sensor is in allowed list
+        if (allowedDeviceIds.size > 0 && alert.sensorId && !allowedDeviceIds.has(alert.sensorId)) {
+          return false;
+        }
+        // Check specific deviceId filter
+        if (filter.deviceId && alert.sensorId !== filter.deviceId) {
+          return false;
+        }
+        return true;
+      });
+      
+      setAlerts(filteredData);
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
@@ -456,7 +486,7 @@ const AlertsPage: React.FC = () => {
 
                     {/* Details */}
                     <div style={{ display: 'flex', gap: '20px', fontSize: '14px', color: '#999' }}>
-                      {alert.location && <span>📍 {alert.location}</span>}
+                      {alert.location && <span>📍 {coordsToLocation(alert.location)}</span>}
                       {alert.sensorId && <span>🔧 Sensor: {alert.sensorId}</span>}
                       {alert.parameter && <span>📊 {alert.parameter}</span>}
                       {alert.actualValue && (
@@ -507,7 +537,7 @@ const AlertsPage: React.FC = () => {
                             fontWeight: 'bold',
                           }}
                         >
-                          Resolve
+                          Resolve & Delete
                         </button>
                       </>
                     )}
@@ -525,8 +555,18 @@ const AlertsPage: React.FC = () => {
                           fontWeight: 'bold',
                         }}
                       >
-                        Resolve
+                        Resolve & Delete
                       </button>
+                    )}
+                    {alert.status === 'RESOLVED' && (
+                      <span style={{ 
+                        padding: '8px 16px',
+                        color: '#4CAF50',
+                        fontSize: '14px',
+                        fontWeight: 'bold'
+                      }}>
+                        ✓ Resolved
+                      </span>
                     )}
                   </div>
                 </div>

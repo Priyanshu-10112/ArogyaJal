@@ -12,7 +12,7 @@ import java.util.concurrent.ExecutionException;
 
 @Repository
 public class SymptomRepository {
-    private static final String COLLECTION_NAME = "symptom_reports";
+    private static final String COLLECTION_NAME = "symptomReports";
     private final Firestore db;
 
     public SymptomRepository() {
@@ -97,7 +97,12 @@ public class SymptomRepository {
         List<QueryDocumentSnapshot> documents = future.get().getDocuments();
         List<SymptomReport> reports = new ArrayList<>();
         for (QueryDocumentSnapshot document : documents) {
-            reports.add(document.toObject(SymptomReport.class));
+            try {
+                reports.add(document.toObject(SymptomReport.class));
+            } catch (RuntimeException e) {
+                // Skip documents with incompatible geoLocation format
+                System.err.println("Skipping document " + document.getId() + " due to deserialization error: " + e.getMessage());
+            }
         }
         return reports;
     }

@@ -1,4 +1,4 @@
-package com.arogyajal.model;
+﻿package com.arogyajal.model;
 
 import com.google.cloud.firestore.annotation.DocumentId;
 import com.google.cloud.firestore.annotation.ServerTimestamp;

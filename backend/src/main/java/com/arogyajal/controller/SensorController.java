@@ -1,8 +1,10 @@
 package com.arogyajal.controller;
 
 import com.arogyajal.dto.SensorData;
+import com.arogyajal.dto.WaterQualityResponse;
 import com.arogyajal.model.SensorReading;
 import com.arogyajal.service.SensorService;
+import com.arogyajal.service.WaterQualityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,14 +30,16 @@ public class SensorController {
 
     private static final Logger log = LoggerFactory.getLogger(SensorController.class);
     private final SensorService sensorService;
+    private final WaterQualityService waterQualityService;
     
     // Cache for sensor readings (30 second TTL to reduce Firestore reads)
     private List<SensorReading> cachedReadings = null;
     private long readingsCacheTimestamp = 0;
     private static final long READINGS_CACHE_TTL_MS = 30000; // 30 seconds
 
-    public SensorController(SensorService sensorService) {
+    public SensorController(SensorService sensorService, WaterQualityService waterQualityService) {
         this.sensorService = sensorService;
+        this.waterQualityService = waterQualityService;
     }
     
     /**
@@ -91,6 +95,21 @@ public class SensorController {
         }
     }
 
+    @GetMapping("/sensor-data")
+    @Operation(summary = "Get all sensor data", 
+              description = "Retrieve all sensor readings (for WhatsApp/browser compatibility)")
+    public ResponseEntity<List<SensorReading>> getAllSensorData() {
+        log.info("GET request for all sensor data");
+        try {
+            List<SensorReading> readings = sensorService.getAllSensorReadings();
+            log.info("Returning {} sensor readings", readings.size());
+            return ResponseEntity.ok(readings);
+        } catch (Exception e) {
+            log.error("Error fetching all sensor data", e);
+            return ResponseEntity.ok(new ArrayList<>()); // Return empty list instead of error
+        }
+    }
+    
     @PostMapping("/sensor-data")
     @Operation(summary = "Submit sensor data", 
               description = "Receive sensor data from IoT devices in JSON format")
@@ -244,6 +263,33 @@ public class SensorController {
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Error fetching sensor data statistics: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @GetMapping("/sensor-data/water-quality/{deviceId}")
+    @Operation(summary = "Get water quality assessment for device",
+              description = "Returns comprehensive water quality evaluation with government-standard scoring")
+    public ResponseEntity<WaterQualityResponse> getWaterQuality(
+            @Parameter(description = "Device ID") @PathVariable String deviceId) {
+        log.info("Fetching water quality assessment for device: {}", deviceId);
+        try {
+            // Get latest reading for device
+            Optional<SensorReading> latestReading = sensorService.getLatestReadingBySensorId(deviceId);
+            
+            if (latestReading.isEmpty()) {
+                log.warn("No readings found for device: {}", deviceId);
+                return ResponseEntity.notFound().build();
+            }
+            
+            // Calculate water quality using government-standard rules
+            WaterQualityResponse response = waterQualityService.calculateWaterQuality(latestReading.get());
+            
+            log.info("Water quality for {}: {} - {}", deviceId, response.getFinalStatus(), response.getStatusReason());
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error calculating water quality for device {}: {}", deviceId, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

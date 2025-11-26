@@ -172,6 +172,20 @@ public class SymptomClusterController {
                 transformed.put("status", "ACTIVE");
                 transformed.put("clusterScore", score);
                 
+                // Extract dominant symptoms from ML response
+                List<List<Object>> dominantSymptoms = (List<List<Object>>) cluster.get("dominant_symptoms");
+                if (dominantSymptoms != null && !dominantSymptoms.isEmpty()) {
+                    List<String> symptomNames = new ArrayList<>();
+                    for (List<Object> symptom : dominantSymptoms) {
+                        if (symptom.size() >= 1) {
+                            symptomNames.add((String) symptom.get(0));
+                        }
+                    }
+                    transformed.put("dominantSymptoms", symptomNames);
+                } else {
+                    transformed.put("dominantSymptoms", new ArrayList<>());
+                }
+                
                 transformedClusters.add(transformed);
             }
             

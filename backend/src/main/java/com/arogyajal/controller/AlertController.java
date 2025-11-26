@@ -162,6 +162,8 @@ public class AlertController {
         log.info("Acknowledging alert {} by user {}", id, userId);
         try {
             Alert alert = alertService.acknowledgeAlert(id, userId);
+            // Clear cache after update
+            cachedAlerts = null;
             return ResponseEntity.ok(alert);
         } catch (Exception e) {
             log.error("Error acknowledging alert: {}", id, e);
@@ -170,16 +172,21 @@ public class AlertController {
     }
 
     @PostMapping("/{id}/resolve")
-    @Operation(summary = "Resolve alert", description = "Mark an alert as resolved")
-    public ResponseEntity<Alert> resolveAlert(
+    @Operation(summary = "Resolve alert", description = "Mark an alert as resolved and delete from database")
+    public ResponseEntity<Map<String, String>> resolveAlert(
             @Parameter(description = "Alert ID") @PathVariable String id,
             @RequestBody(required = false) Map<String, String> body) {
         String resolvedBy = body != null ? body.getOrDefault("resolvedBy", "system") : "system";
         String resolutionNotes = body != null ? body.getOrDefault("resolutionNotes", "") : "";
-        log.info("Resolving alert {} by user {}", id, resolvedBy);
+        log.info("Resolving and deleting alert {} by user {}", id, resolvedBy);
         try {
-            Alert alert = alertService.resolveAlert(id, resolvedBy, resolutionNotes);
-            return ResponseEntity.ok(alert);
+            // First mark as resolved
+            alertService.resolveAlert(id, resolvedBy, resolutionNotes);
+            // Then delete from database
+            alertService.deleteAlert(id);
+            // Clear cache after delete
+            cachedAlerts = null;
+            return ResponseEntity.ok(Map.of("message", "Alert resolved and deleted successfully"));
         } catch (Exception e) {
             log.error("Error resolving alert: {}", id, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();

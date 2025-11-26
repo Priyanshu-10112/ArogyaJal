@@ -325,25 +325,7 @@ const DashboardNew: React.FC = () => {
               </div>
             </div>
 
-            {/* Dissolved Oxygen */}
-            <div
-              style={{
-                padding: '20px',
-                backgroundColor: 'white',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-              }}
-            >
-              <div style={{ fontSize: '14px', color: '#666', marginBottom: '10px' }}>
-                Dissolved Oxygen
-              </div>
-              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#00BCD4' }}>
-                {sensorData.sensors.DO_mgL?.toFixed(1) || 'N/A'} mg/L
-              </div>
-              <div style={{ fontSize: '12px', color: '#999', marginTop: '5px' }}>
-                Normal: {'>'} 5 mg/L
-              </div>
-            </div>
+            {/* DO sensor not available - removed */}
 
             {/* TDS */}
             <div

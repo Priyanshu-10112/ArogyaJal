@@ -15,7 +15,7 @@ def predict_wqi(sensor_data):
     
     Args:
         sensor_data (dict or pd.DataFrame): Dictionary or DataFrame containing sensor readings with keys:
-                                          ['ph', 'temperature', 'tds', 'dissolved_oxygen', 'turbidity']
+                                          ['ph', 'temperature', 'tds', 'turbidity']
                                           
     Returns:
         float or np.ndarray: Predicted WQI value(s)

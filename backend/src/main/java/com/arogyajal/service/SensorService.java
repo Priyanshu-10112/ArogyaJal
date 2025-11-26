@@ -23,14 +23,20 @@ public class SensorService {
     private final SensorRepository sensorRepository;
     private final MLPredictionService mlPredictionService;
     private final AlertService alertService;
+    private final SmartAlertService smartAlertService;
     private final SensorHealthMonitorService sensorHealthMonitorService;
+    private final ReverseGeocodingService reverseGeocodingService;
     
     public SensorService(SensorRepository sensorRepository, MLPredictionService mlPredictionService, 
-                        AlertService alertService, SensorHealthMonitorService sensorHealthMonitorService) {
+                        AlertService alertService, SmartAlertService smartAlertService,
+                        SensorHealthMonitorService sensorHealthMonitorService,
+                        ReverseGeocodingService reverseGeocodingService) {
         this.sensorRepository = sensorRepository;
         this.mlPredictionService = mlPredictionService;
         this.alertService = alertService;
+        this.smartAlertService = smartAlertService;
         this.sensorHealthMonitorService = sensorHealthMonitorService;
+        this.reverseGeocodingService = reverseGeocodingService;
     }
     
     /**
@@ -76,6 +82,17 @@ public class SensorService {
             // Set location if available
             if (sensorData.getLocation() != null) {
                 reading.setLocation(sensorData.getLocation().getLat() + "," + sensorData.getLocation().getLon());
+                
+                // Enrich device with reverse geocoding (only for new devices)
+                try {
+                    reverseGeocodingService.enrichDeviceLocation(
+                        deviceId, 
+                        sensorData.getLocation().getLat(), 
+                        sensorData.getLocation().getLon()
+                    );
+                } catch (Exception e) {
+                    log.warn("Reverse geocoding failed for device {}: {}", deviceId, e.getMessage());
+                }
             }
             
             // Set sensor readings if available
@@ -94,8 +111,8 @@ public class SensorService {
                     reading.setTurbidity(0.0);
                 }
                 
-                reading.setDissolvedOxygen(sensorData.getSensors().getDO_mgL() != null ? 
-                    sensorData.getSensors().getDO_mgL() : 0.0);
+                // DO sensor not available - set to 0
+                reading.setDissolvedOxygen(0.0);
                 
                 if (sensorData.getSensors().getTDS_ppm() != null) {
                     reading.setTotalDissolvedSolids(sensorData.getSensors().getTDS_ppm().doubleValue());
@@ -112,11 +129,12 @@ public class SensorService {
                 
                 // Check if we have enough sensor data for ML prediction
                 int availableSensors = 0;
+                // Count only available sensors (4 sensors: pH, Temp, TDS, Turbidity)
                 if (reading.getPh() != null && reading.getPh() > 0) availableSensors++;
                 if (reading.getTemperature() != null && reading.getTemperature() > 0) availableSensors++;
                 if (reading.getTotalDissolvedSolids() != null && reading.getTotalDissolvedSolids() > 0) availableSensors++;
-                if (reading.getDissolvedOxygen() != null && reading.getDissolvedOxygen() > 0) availableSensors++;
                 if (reading.getTurbidity() != null && reading.getTurbidity() > 0) availableSensors++;
+                // DO sensor not available - not counted
                 
                 boolean hasSufficientData = availableSensors >= 3;
                 
@@ -130,7 +148,6 @@ public class SensorService {
                             reading.getPh(),
                             reading.getTemperature(),
                             reading.getTotalDissolvedSolids(),
-                            reading.getDissolvedOxygen(),
                             reading.getTurbidity()
                         );
                         
@@ -187,19 +204,42 @@ public class SensorService {
             reading.setId(documentId);
             
             // Debug log before save
-            log.info("About to save - pH: {}, temp: {}, turbidity: {}, DO: {}, TDS: {}, severity: {}", 
+            log.info("About to save - pH: {}, temp: {}, turbidity: {}, TDS: {}, severity: {}", 
                 reading.getPh(), reading.getTemperature(), reading.getTurbidity(), 
-                reading.getDissolvedOxygen(), reading.getTotalDissolvedSolids(), reading.getSeverity());
+                reading.getTotalDissolvedSolids(), reading.getSeverity());
             
             sensorRepository.save(reading, documentId);
             log.info("Saved sensor data for device: {} with ID: {}", deviceId, documentId);
             
-            // Automatically check for water quality alerts
+            // Smart Alert System - Process with intelligent alert logic
             try {
-                alertService.checkForWaterQualityAlerts(reading);
-                log.info("Checked for water quality alerts for device: {}", deviceId);
+                String severity = calculateSeverityForAlert(reading);
+                SmartAlertService.SmartAlertResult result = 
+                    smartAlertService.processSensorReading(reading, severity);
+                
+                log.info("🚨 Smart Alert Result: {} - {} (Device: {})", 
+                    result.getAction(), result.getReason(), deviceId);
+                
+                // Log different actions
+                switch (result.getAction()) {
+                    case "ALERT_CREATED":
+                        log.info("✅ Alert created: {}", result.getAlertId());
+                        break;
+                    case "WAITING_CONFIRMATION":
+                        log.info("⏳ Waiting for repeat confirmation");
+                        break;
+                    case "RATE_LIMITED":
+                        log.info("🚫 Alert suppressed - rate limited");
+                        break;
+                    case "UI_HIGHLIGHT":
+                        log.info("💡 UI highlight only - no push alert");
+                        break;
+                    case "NO_ACTION":
+                        log.info("✓ Normal reading - no alert needed");
+                        break;
+                }
             } catch (Exception e) {
-                log.error("Error checking for alerts: {}", e.getMessage(), e);
+                log.error("Error in smart alert processing: {}", e.getMessage(), e);
                 // Don't fail the entire operation if alert check fails
             }
             
@@ -292,9 +332,9 @@ public class SensorService {
             
             // Filter out readings with null timestamps and sort the rest
             List<SensorReading> validReadings = readings.stream()
-                .peek(reading -> log.debug("Reading - ID: {}, pH: {}, temp: {}, turbidity: {}, DO: {}, TDS: {}", 
+                .peek(reading -> log.debug("Reading - ID: {}, pH: {}, temp: {}, turbidity: {}, TDS: {}", 
                     reading.getId(), reading.getPh(), reading.getTemperature(), 
-                    reading.getTurbidity(), reading.getDissolvedOxygen(), reading.getTotalDissolvedSolids()))
+                    reading.getTurbidity(), reading.getTotalDissolvedSolids()))
                 .filter(r -> r.getTimestamp() != null)
                 .sorted((r1, r2) -> r2.getTimestamp().compareTo(r1.getTimestamp()))
                 .collect(Collectors.toList());
@@ -305,10 +345,9 @@ public class SensorService {
             }
             
             SensorReading latestReading = validReadings.get(0);
-            log.info("Latest reading for device {}: pH={}, temp={}, turbidity={}, DO={}, TDS={}", 
+            log.info("Latest reading for device {}: pH={}, temp={}, turbidity={}, TDS={}", 
                 deviceId, latestReading.getPh(), latestReading.getTemperature(), 
-                latestReading.getTurbidity(), latestReading.getDissolvedOxygen(), 
-                latestReading.getTotalDissolvedSolids());
+                latestReading.getTurbidity(), latestReading.getTotalDissolvedSolids());
                 
             SensorData result = convertToSensorData(latestReading);
             log.info("Converted SensorData: {}", result);
@@ -662,10 +701,7 @@ public class SensorService {
             log.debug("Setting turbidity: {}", reading.getTurbidity());
             sensors.setTurbidity_NTU(reading.getTurbidity());
         }
-        if (reading.getDissolvedOxygen() != null) {
-            log.debug("Setting dissolved oxygen: {}", reading.getDissolvedOxygen());
-            sensors.setDO_mgL(reading.getDissolvedOxygen());
-        }
+        // DO sensor not available - not included in response
         if (reading.getTotalDissolvedSolids() != null) {
             int tdsValue = reading.getTotalDissolvedSolids().intValue();
             log.debug("Setting TDS: {}", tdsValue);
@@ -754,15 +790,7 @@ public class SensorService {
             }
         }
         
-        // Check DO (ideal: > 6 mg/L)
-        if (reading.getDissolvedOxygen() != null && reading.getDissolvedOxygen() > 0) {
-            availableSensors++;
-            if (reading.getDissolvedOxygen() < 4) {
-                criticalCount++;
-            } else if (reading.getDissolvedOxygen() < 6) {
-                warningCount++;
-            }
-        }
+        // DO sensor not available - not checked
         
         // Check turbidity (ideal: < 5 NTU)
         if (reading.getTurbidity() != null && reading.getTurbidity() > 0) {
@@ -790,6 +818,66 @@ public class SensorService {
         } else {
             return "EXCELLENT";
         }
+    }
+    
+    /**
+     * Calculate severity for smart alert system
+     * Returns: NORMAL, MODERATE, HIGH, or CRITICAL
+     */
+    private String calculateSeverityForAlert(SensorReading reading) {
+        int criticalCount = 0;
+        int highCount = 0;
+        int moderateCount = 0;
+        
+        // pH check (ideal: 6.5-8.5)
+        if (reading.getPh() != null && reading.getPh() > 0) {
+            if (reading.getPh() < 4.0 || reading.getPh() > 10.0) {
+                criticalCount++;
+            } else if (reading.getPh() < 5.0 || reading.getPh() > 9.0) {
+                highCount++;
+            } else if (reading.getPh() < 6.5 || reading.getPh() > 8.5) {
+                moderateCount++;
+            }
+        }
+        
+        // TDS check (ideal: <500 ppm)
+        if (reading.getTotalDissolvedSolids() != null && reading.getTotalDissolvedSolids() > 0) {
+            if (reading.getTotalDissolvedSolids() > 1000) {
+                criticalCount++;
+            } else if (reading.getTotalDissolvedSolids() > 750) {
+                highCount++;
+            } else if (reading.getTotalDissolvedSolids() > 500) {
+                moderateCount++;
+            }
+        }
+        
+        // Turbidity check (ideal: <5 NTU)
+        if (reading.getTurbidity() != null && reading.getTurbidity() > 0) {
+            if (reading.getTurbidity() > 10) {
+                criticalCount++;
+            } else if (reading.getTurbidity() > 7) {
+                highCount++;
+            } else if (reading.getTurbidity() > 5) {
+                moderateCount++;
+            }
+        }
+        
+        // Temperature check (ideal: 15-30°C)
+        if (reading.getTemperature() != null && reading.getTemperature() > 0) {
+            if (reading.getTemperature() > 35 || reading.getTemperature() < 10) {
+                criticalCount++;
+            } else if (reading.getTemperature() > 32 || reading.getTemperature() < 15) {
+                highCount++;
+            } else if (reading.getTemperature() > 30) {
+                moderateCount++;
+            }
+        }
+        
+        // Determine overall severity
+        if (criticalCount > 0) return "CRITICAL";
+        if (highCount > 1) return "HIGH";
+        if (highCount == 1 || moderateCount > 1) return "MODERATE";
+        return "NORMAL";
     }
     
     /**
@@ -840,15 +928,8 @@ public class SensorService {
                 }
             }
             
-            // Check Dissolved Oxygen
-            if (reading.getDissolvedOxygen() != null && reading.getDissolvedOxygen() > 0) {
-                String severity = alertService.getSeverityForParameter("Dissolved Oxygen", reading.getDissolvedOxygen());
-                int level = severityLevels.getOrDefault(severity, 0);
-                if (level > highestLevel) {
-                    highestLevel = level;
-                    highestSeverity = severity;
-                }
-            }
+            // DO sensor not available - not checked
+            // Disabled - DO sensor not available
             
             // Check Conductivity
             if (reading.getConductivity() != null && reading.getConductivity() > 0) {

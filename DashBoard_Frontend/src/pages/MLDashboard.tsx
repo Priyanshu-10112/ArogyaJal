@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useGlobalFilter } from '../contexts/GlobalFilterContext';
+import { getAllowedDeviceIds } from '../utils/locationMapper';
 import OutbreakPredictionPanel from '../components/ML/OutbreakPredictionPanel';
 import ClusterMap from '../components/ML/ClusterMap';
 import DeviceHealthCard from '../components/ML/DeviceHealthCard';
@@ -26,6 +28,7 @@ interface DashboardStats {
 }
 
 const MLDashboard: React.FC = () => {
+  const { filter, getBreadcrumb } = useGlobalFilter();
   const [sensors, setSensors] = useState<SensorReading[]>([]);
   const [mlServiceOnline, setMlServiceOnline] = useState<boolean>(false);
   const [stats, setStats] = useState<DashboardStats>({
@@ -41,7 +44,7 @@ const MLDashboard: React.FC = () => {
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [filter]);
 
   const fetchDashboardData = async () => {
     try {
@@ -59,26 +62,104 @@ const MLDashboard: React.FC = () => {
         setMlServiceOnline(false);
       }
 
+      // Get allowed device IDs based on global filter
+      const allowedDeviceIds = await getAllowedDeviceIds({
+        state: filter.state,
+        district: filter.district,
+        city: filter.city,
+        village: filter.village
+      });
+      
+      let filteredSensors: SensorReading[] = [];
+      
       // Fetch sensors
       try {
         const sensorsResponse = await fetch(`${API_BASE}/api/sensors/readings`);
         if (sensorsResponse.ok) {
           const sensorsData = await sensorsResponse.json();
-          setSensors(Array.isArray(sensorsData) ? sensorsData : []);
+          const sensorArray = Array.isArray(sensorsData) ? sensorsData : [];
+          
+          // Filter sensors based on allowed device IDs
+          filteredSensors = sensorArray.filter((sensor: SensorReading) => {
+            // If no filter, show all
+            if (allowedDeviceIds.size === 0 && !filter.state && !filter.district && !filter.city && !filter.village) {
+              return true;
+            }
+            // Check if device is in allowed list
+            if (allowedDeviceIds.size > 0 && !allowedDeviceIds.has(sensor.sensorId)) {
+              return false;
+            }
+            // Check specific deviceId filter
+            if (filter.deviceId && sensor.sensorId !== filter.deviceId) {
+              return false;
+            }
+            return true;
+          });
+          
+          setSensors(filteredSensors);
         }
       } catch (err) {
         console.log('Sensors not available:', err);
       }
 
-      // Fetch stats
+      // Calculate stats from filtered data
       try {
-        const statsResponse = await fetch(`${API_BASE}/api/dashboard/stats`);
-        if (statsResponse.ok) {
-          const statsData = await statsResponse.json();
-          setStats(statsData);
+        // Get unique sensor IDs from filtered sensors
+        const uniqueSensorIds = new Set(filteredSensors.map(s => s.sensorId));
+        
+        // Fetch all data for stats calculation
+        const [alertsResponse, reportsResponse, clustersResponse] = await Promise.all([
+          fetch(`${API_BASE}/api/alerts`),
+          fetch(`${API_BASE}/api/symptom-reports`),
+          fetch(`${API_BASE}/api/clusters/active`)
+        ]);
+        
+        let filteredStats = {
+          totalSensors: uniqueSensorIds.size,
+          activeSensors: uniqueSensorIds.size,
+          totalReports: 0,
+          activeClusters: 0,
+          activeAlerts: 0
+        };
+        
+        // Filter alerts by allowed devices
+        if (alertsResponse.ok) {
+          const alerts = await alertsResponse.json();
+          const filteredAlerts = alerts.filter((alert: any) => {
+            if (allowedDeviceIds.size === 0 && !filter.state && !filter.district && !filter.city && !filter.village) {
+              return true;
+            }
+            return allowedDeviceIds.size > 0 && alert.sensorId && allowedDeviceIds.has(alert.sensorId);
+          });
+          filteredStats.activeAlerts = filteredAlerts.filter((a: any) => a.status === 'ACTIVE').length;
         }
+        
+        // Filter symptom reports by location (if needed)
+        if (reportsResponse.ok) {
+          const reports = await reportsResponse.json();
+          // For now, show all reports (can be filtered by location if needed)
+          filteredStats.totalReports = reports.length;
+        }
+        
+        // Filter clusters by location (if needed)
+        if (clustersResponse.ok) {
+          const clusters = await clustersResponse.json();
+          // For now, show all clusters (can be filtered by location if needed)
+          filteredStats.activeClusters = clusters.length;
+        }
+        
+        setStats(filteredStats);
       } catch (err) {
-        console.log('Stats not available:', err);
+        console.log('Error calculating stats:', err);
+        // Fallback to sensor count only
+        const uniqueSensorIds = new Set(filteredSensors.map(s => s.sensorId));
+        setStats({
+          totalSensors: uniqueSensorIds.size,
+          activeSensors: uniqueSensorIds.size,
+          totalReports: 0,
+          activeClusters: 0,
+          activeAlerts: 0
+        });
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);

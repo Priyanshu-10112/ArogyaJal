@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useGlobalFilter } from '../../contexts/GlobalFilterContext';
+import { matchesState } from '../../utils/locationMapper';
 import './ClusterMap.css';
 
 interface Cluster {
@@ -18,6 +20,7 @@ interface Cluster {
 }
 
 const ClusterMap: React.FC = () => {
+  const { filter } = useGlobalFilter();
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,7 +28,7 @@ const ClusterMap: React.FC = () => {
     fetchClusters();
     const interval = setInterval(fetchClusters, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [filter]);
 
   const fetchClusters = async () => {
     const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
@@ -52,8 +55,18 @@ const ClusterMap: React.FC = () => {
             }))
           : [];
         
-        console.log('Transformed clusters:', transformedClusters);
-        setClusters(transformedClusters);
+        // Filter clusters based on global filter
+        const filteredClusters = transformedClusters.filter((cluster: Cluster) => {
+          // For now, show all clusters as they are region-wide
+          // Can be enhanced to filter by location if cluster data includes proper location info
+          if (filter.state && cluster.location) {
+            return matchesState(cluster.location, filter.state);
+          }
+          return true;
+        });
+        
+        console.log('Transformed clusters:', filteredClusters);
+        setClusters(filteredClusters);
       }
     } catch (error) {
       console.error('Error fetching clusters:', error);

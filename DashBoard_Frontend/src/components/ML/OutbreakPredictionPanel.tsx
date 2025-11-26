@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useGlobalFilter } from '../../contexts/GlobalFilterContext';
 import './OutbreakPredictionPanel.css';
 
 interface OutbreakPrediction {
@@ -15,6 +16,7 @@ interface OutbreakPrediction {
 }
 
 const OutbreakPredictionPanel: React.FC = () => {
+  const { filter, getBreadcrumb } = useGlobalFilter();
   const [prediction, setPrediction] = useState<OutbreakPrediction | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -76,9 +78,25 @@ const OutbreakPredictionPanel: React.FC = () => {
     return <div className="outbreak-panel no-data">No outbreak data available</div>;
   }
 
+  const breadcrumb = getBreadcrumb();
+  const hasFilter = breadcrumb.length > 0;
+
   return (
     <div className="outbreak-panel">
       <h2>Outbreak Risk Prediction</h2>
+      {hasFilter && (
+        <div style={{ 
+          fontSize: '12px', 
+          color: '#f59e0b', 
+          marginBottom: '10px',
+          padding: '8px',
+          background: '#fffbeb',
+          borderRadius: '4px',
+          border: '1px solid #fef3c7'
+        }}>
+          ⚠️ Note: Risk prediction is region-wide (not filtered by location)
+        </div>
+      )}
       
       {/* Risk Meter */}
       <div className="risk-meter">

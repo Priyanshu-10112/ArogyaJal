@@ -1,0 +1,108 @@
+/* ============================================
+   LAYOUT FIX - Proper alignment for all pages
+   ============================================ */
+
+/* Ensure proper spacing after GlobalFilterBar */
+.page-content {
+  padding-top: 0 !important;
+}
+
+.page-content > * {
+  padding: 1.5rem;
+}
+
+/* Dashboard specific fixes */
+.dashboard-header-new {
+  margin-top: 0;
+}
+
+/* Trends page fixes */
+.page-content h1 {
+  margin-top: 0;
+}
+
+/* Remove extra margins from first elements */
+.page-content > div:first-child,
+.page-content > h1:first-child {
+  margin-top: 0;
+}
+
+/* Ensure consistent spacing */
+.location-filter {
+  margin-top: 0;
+}
+
+/* Map container proper sizing */
+.map-container {
+  margin-top: 1rem;
+}
+
+/* ML Dashboard grid alignment */
+.ml-dashboard {
+  padding: 1.5rem;
+}
+
+.dashboard-header {
+  margin-top: 0;
+}
+
+/* Stats grid alignment */
+.stats-grid {
+  margin-top: 1rem;
+}
+
+/* Device grid alignment */
+.device-grid {
+  margin-top: 1rem;
+}
+
+/* Sensor grid alignment */
+.sensor-grid {
+  margin-top: 1rem;
+}
+
+/* Chart sections */
+.chart-section-header {
+  margin-top: 2rem;
+}
+
+.chart-section-header:first-of-type {
+  margin-top: 1rem;
+}
+
+/* Alert page fixes */
+.alert-stats {
+  margin-top: 1rem;
+}
+
+/* Ensure no overflow */
+.main-content {
+  overflow-x: hidden;
+}
+
+.page-content {
+  overflow-x: hidden;
+  width: 100%;
+}
+
+/* Fix for cards and containers */
+.water-quality-card,
+.location-filter,
+.device-card,
+.sensor-card,
+.alert-card {
+  margin-bottom: 1.5rem;
+}
+
+/* Responsive fixes */
+@media (max-width: 768px) {
+  .page-content > * {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-content > * {
+    padding: 0.75rem;
+  }
+}

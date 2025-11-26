@@ -40,7 +40,7 @@ def load_model():
             
             # Generate sample data and train
             data = generate_sample_data(n_samples=1000)
-            X = data[['ph', 'temperature', 'tds', 'dissolved_oxygen', 'turbidity']]
+            X = data[['ph', 'temperature', 'tds', 'turbidity']]
             y = data['wqi']
             
             predictor = train_model(X, y)
@@ -85,7 +85,6 @@ def predict():
         "ph": 7.2,
         "temperature": 25.5,
         "tds": 350,
-        "dissolved_oxygen": 6.8,
         "turbidity": 2.1
     }
     
@@ -94,7 +93,6 @@ def predict():
         "pH": 7.2,
         "temperature_C": 25.5,
         "TDS_ppm": 350,
-        "DO_mgL": 6.8,
         "turbidity_NTU": 2.1
     }
     """
@@ -109,21 +107,26 @@ def predict():
             }), 400
         
         # Normalize field names (handle different naming conventions)
+        # All fields now have defaults for missing sensors
         normalized_data = {
-            'ph': data.get('ph') or data.get('pH') or data.get('PH'),
-            'temperature': data.get('temperature') or data.get('temperature_C') or data.get('temp'),
-            'tds': data.get('tds') or data.get('TDS_ppm') or data.get('TDS'),
-            'dissolved_oxygen': data.get('dissolved_oxygen') or data.get('DO_mgL') or data.get('DO'),
-            'turbidity': data.get('turbidity') or data.get('turbidity_NTU')
+            'ph': data.get('ph') or data.get('pH') or data.get('PH') or 7.0,  # Default neutral pH
+            'temperature': data.get('temperature') or data.get('temperature_C') or data.get('temp') or 25.0,  # Default 25°C
+            'tds': data.get('tds') or data.get('TDS_ppm') or data.get('TDS') or 300.0,  # Default 300 ppm
+            'turbidity': data.get('turbidity') or data.get('turbidity_NTU') or 5.0  # Default 5 NTU
         }
         
-        # Validate required fields
-        missing_fields = [k for k, v in normalized_data.items() if v is None]
-        if missing_fields:
+        # Validate at least ONE sensor reading is provided
+        has_any_sensor = any([
+            data.get('ph') or data.get('pH') or data.get('PH'),
+            data.get('temperature') or data.get('temperature_C') or data.get('temp'),
+            data.get('tds') or data.get('TDS_ppm') or data.get('TDS'),
+            data.get('turbidity') or data.get('turbidity_NTU')
+        ])
+        
+        if not has_any_sensor:
             return jsonify({
-                'error': 'Missing required fields',
-                'missing_fields': missing_fields,
-                'message': 'All sensor readings (ph, temperature, tds, dissolved_oxygen, turbidity) are required'
+                'error': 'No sensor data provided',
+                'message': 'At least one sensor reading is required (ph, temperature, tds, or turbidity)'
             }), 400
         
         # Convert to DataFrame for prediction
@@ -193,7 +196,6 @@ def batch_predict():
                     'ph': reading.get('ph') or reading.get('pH'),
                     'temperature': reading.get('temperature') or reading.get('temperature_C'),
                     'tds': reading.get('tds') or reading.get('TDS_ppm'),
-                    'dissolved_oxygen': reading.get('dissolved_oxygen') or reading.get('DO_mgL'),
                     'turbidity': reading.get('turbidity') or reading.get('turbidity_NTU')
                 }
                 

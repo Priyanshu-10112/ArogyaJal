@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { useGlobalFilter } from '../contexts/GlobalFilterContext';
 import { MapContainer, TileLayer, CircleMarker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+import { coordsToLocation, getAllowedDeviceIds } from '../utils/locationMapper';
 import '../App.css';
 
 // Interfaces
@@ -42,6 +43,7 @@ interface Cluster {
 }
 
 const MapPage: React.FC = () => {
+  const { filter } = useGlobalFilter();
   const [isClient, setIsClient] = useState(false);
   const [sensors, setSensors] = useState<SensorData[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -52,19 +54,18 @@ const MapPage: React.FC = () => {
   // North East India region center (Assam/Meghalaya area)
   const center: [number, number] = [26.2006, 92.9376]; // Guwahati, Assam - NER Hub
 
-  useEffect(() => {
-    setIsClient(true);
-    fetchMapData();
-    
-    // Refresh every 15 seconds for near real-time updates
-    const interval = setInterval(fetchMapData, 15000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchMapData = async () => {
+  const fetchMapData = useCallback(async () => {
     const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
     
     try {
+      // Get allowed device IDs based on global filter
+      const allowedDeviceIds = await getAllowedDeviceIds({
+        state: filter.state,
+        district: filter.district,
+        city: filter.city,
+        village: filter.village
+      });
+      
       // Fetch sensors with readings
       try {
         const sensorsResponse = await fetch(`${API_BASE}/api/sensors/readings`);
@@ -81,7 +82,24 @@ const MapPage: React.FC = () => {
             };
           }).filter((s: any) => s.latitude !== 0 && s.longitude !== 0);
           
-          setSensors(transformedSensors);
+          // Filter sensors based on allowed device IDs
+          const filteredSensors = transformedSensors.filter((sensor: SensorData) => {
+            // If no filter, show all
+            if (allowedDeviceIds.size === 0 && !filter.state && !filter.district && !filter.city && !filter.village) {
+              return true;
+            }
+            // Check if device is in allowed list
+            if (allowedDeviceIds.size > 0 && !allowedDeviceIds.has(sensor.sensorId)) {
+              return false;
+            }
+            // Check specific deviceId filter
+            if (filter.deviceId && sensor.sensorId !== filter.deviceId) {
+              return false;
+            }
+            return true;
+          });
+          
+          setSensors(filteredSensors);
         } else {
           console.warn('Failed to fetch sensors:', sensorsResponse.status);
         }
@@ -94,7 +112,25 @@ const MapPage: React.FC = () => {
         const alertsResponse = await fetch(`${API_BASE}/api/alerts`);
         if (alertsResponse.ok) {
           const alertsData = await alertsResponse.json();
-          setAlerts(alertsData);
+          
+          // Filter alerts based on allowed device IDs
+          const filteredAlerts = alertsData.filter((alert: Alert) => {
+            // If no filter, show all
+            if (allowedDeviceIds.size === 0 && !filter.state && !filter.district && !filter.city && !filter.village) {
+              return true;
+            }
+            // Check if alert's sensor is in allowed list
+            if (allowedDeviceIds.size > 0 && alert.sensorId && !allowedDeviceIds.has(alert.sensorId)) {
+              return false;
+            }
+            // Check specific deviceId filter
+            if (filter.deviceId && alert.sensorId !== filter.deviceId) {
+              return false;
+            }
+            return true;
+          });
+          
+          setAlerts(filteredAlerts);
         } else {
           console.warn('Failed to fetch alerts:', alertsResponse.status);
         }
@@ -120,7 +156,16 @@ const MapPage: React.FC = () => {
       console.error('Error fetching map data:', error);
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    setIsClient(true);
+    fetchMapData();
+    
+    // Refresh every 15 seconds for near real-time updates
+    const interval = setInterval(fetchMapData, 15000);
+    return () => clearInterval(interval);
+  }, [fetchMapData]);
 
   // Get color based on water quality
   const getQualityColor = (sensor: SensorData): string => {
@@ -137,7 +182,7 @@ const MapPage: React.FC = () => {
     const issues = [];
     if (sensor.ph && (sensor.ph < 6.5 || sensor.ph > 8.5)) issues.push('pH');
     if (sensor.turbidity && sensor.turbidity > 5) issues.push('turbidity');
-    if (sensor.dissolvedOxygen && sensor.dissolvedOxygen < 5) issues.push('DO');
+    // DO sensor not available
     if (sensor.temperature && sensor.temperature > 30) issues.push('temp');
 
     if (issues.length === 0) return '#10b981'; // Green - Good
@@ -275,7 +320,7 @@ const MapPage: React.FC = () => {
         display: 'flex',
         gap: '20px'
       }}>
-        <div>📍 <strong>{sensors.length}</strong> Sensors</div>
+        <div>📍 <strong>{new Set(sensors.map(s => s.sensorId)).size}</strong> Sensors</div>
         <div>🚨 <strong>{alerts.length}</strong> Active Alerts</div>
         <div>🎯 <strong>{clusters.length}</strong> Active Clusters</div>
       </div>
@@ -292,14 +337,21 @@ const MapPage: React.FC = () => {
           />
           
           {/* Sensor Markers */}
-          {sensors.map((sensor) => {
+          {sensors.map((sensor, index) => {
             const sensorAlerts = getSensorAlerts(sensor.sensorId);
             const color = getQualityColor(sensor);
+            
+            // Add small offset to prevent overlapping markers at same location
+            // Create a spiral pattern for overlapping markers
+            const offset = 0.0005; // ~50 meters
+            const angle = (index * 45) * (Math.PI / 180); // 45 degrees apart
+            const latOffset = Math.cos(angle) * offset * (Math.floor(index / 8) + 1);
+            const lngOffset = Math.sin(angle) * offset * (Math.floor(index / 8) + 1);
             
             return (
               <CircleMarker
                 key={sensor.id}
-                center={[sensor.latitude, sensor.longitude]}
+                center={[sensor.latitude + latOffset, sensor.longitude + lngOffset]}
                 radius={10}
                 pathOptions={{
                   fillColor: color,
@@ -314,7 +366,7 @@ const MapPage: React.FC = () => {
                       📍 {sensor.sensorId}
                     </h3>
                     <p style={{ margin: '5px 0', color: '#6b7280', fontSize: '12px' }}>
-                      📍 {sensor.location}
+                      📍 {coordsToLocation(sensor.location)}
                     </p>
                     <p style={{ margin: '5px 0', color: '#6b7280', fontSize: '12px' }}>
                       🕐 {formatTime(sensor.timestamp)}
@@ -344,11 +396,7 @@ const MapPage: React.FC = () => {
                           🌫️ <strong>Turbidity:</strong> {sensor.turbidity.toFixed(2)} NTU
                         </div>
                       )}
-                      {sensor.dissolvedOxygen !== undefined && sensor.dissolvedOxygen !== null && (
-                        <div style={{ margin: '5px 0' }}>
-                          💨 <strong>DO:</strong> {sensor.dissolvedOxygen.toFixed(2)} mg/L
-                        </div>
-                      )}
+                      {/* DO sensor not available - removed */}
                       {sensor.conductivity !== undefined && sensor.conductivity !== null && (
                         <div style={{ margin: '5px 0' }}>
                           ⚡ <strong>Conductivity:</strong> {sensor.conductivity.toFixed(0)} µS/cm

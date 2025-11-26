@@ -425,6 +425,17 @@ public class AlertService {
         }
     }
 
+    public void deleteAlert(String id) {
+        log.info("Deleting alert: {}", id);
+        try {
+            alertRepository.deleteById(id);
+            log.info("Alert {} deleted successfully", id);
+        } catch (Exception e) {
+            log.error("Error deleting alert: " + id, e);
+            throw new RuntimeException("Failed to delete alert", e);
+        }
+    }
+
     public void checkForWaterQualityAlerts(SensorReading reading) {
         log.info("Checking for water quality alerts for sensor: {}", reading.getSensorId());
         try {
@@ -448,10 +459,7 @@ public class AlertService {
                 createAlert(createWaterQualityAlert(reading, "TDS", reading.getTotalDissolvedSolids()));
             }
             
-            // Check dissolved oxygen (ideal: > 5 mg/L)
-            if (reading.getDissolvedOxygen() != null && reading.getDissolvedOxygen() < 5.0) {
-                createAlert(createWaterQualityAlert(reading, "Dissolved Oxygen", reading.getDissolvedOxygen()));
-            }
+            // DO sensor not available - alert disabled
             
             // Check temperature (ideal: < 30°C)
             if (reading.getTemperature() != null && reading.getTemperature() > 30) {

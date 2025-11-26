@@ -32,31 +32,27 @@ public class MLPredictionService {
     }
     
     /**
-     * Predict WQI from sensor data
+     * Predict WQI from sensor data (4 sensors only)
      * 
      * @param ph pH value
      * @param temperature Temperature in Celsius
      * @param tds Total Dissolved Solids in ppm
-     * @param dissolvedOxygen Dissolved Oxygen in mg/L
      * @param turbidity Turbidity in NTU
      * @return WQI prediction result
      */
-    public WQIPrediction predictWQI(Double ph, Double temperature, Double tds, 
-                                    Double dissolvedOxygen, Double turbidity) {
+    public WQIPrediction predictWQI(Double ph, Double temperature, Double tds, Double turbidity) {
         try {
-            // Check if all required fields are present
-            if (ph == null || temperature == null || tds == null || 
-                dissolvedOxygen == null || turbidity == null) {
+            // Check if all required fields are present (4 sensors only)
+            if (ph == null || temperature == null || tds == null || turbidity == null) {
                 log.warn("Missing required fields for ML prediction. Using fallback.");
                 return new WQIPrediction(0.0, "UNKNOWN", false, "Missing required sensor readings");
             }
             
-            // Prepare request data
+            // Prepare request data (4 sensors only - DO not available)
             Map<String, Object> requestData = new HashMap<>();
             requestData.put("ph", ph);
             requestData.put("temperature", temperature);
             requestData.put("tds", tds);
-            requestData.put("dissolved_oxygen", dissolvedOxygen);
             requestData.put("turbidity", turbidity);
             
             // Set headers

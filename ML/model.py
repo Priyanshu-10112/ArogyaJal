@@ -29,7 +29,7 @@ class WaterQualityPredictor:
         """
         self.model = None
         self.scaler = StandardScaler()
-        self.features = ['ph', 'temperature', 'tds', 'dissolved_oxygen', 'turbidity']
+        self.features = ['ph', 'temperature', 'tds', 'turbidity']
         self.target = 'wqi'
         self.model_type = model_type
         self.model_dir = Path(__file__).parent / 'models'

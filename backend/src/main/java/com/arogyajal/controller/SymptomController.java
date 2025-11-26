@@ -1,4 +1,4 @@
-package com.arogyajal.controller;
+﻿package com.arogyajal.controller;
 
 import com.arogyajal.dto.SymptomRequest;
 import com.arogyajal.model.SymptomReport;
@@ -39,6 +39,57 @@ public class SymptomController {
     public SymptomController(SymptomService symptomService, AlertService alertService) {
         this.symptomService = symptomService;
         this.alertService = alertService;
+    }
+    
+    @GetMapping
+    @Operation(summary = "Get symptom reporting API info", description = "Returns API information and usage instructions")
+    public ResponseEntity<?> getSymptomApiInfo() {
+        log.info("GET request received for /api/symptoms - returning API info");
+        
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("service", "ArogyaJal Symptom Reporting API");
+        response.put("version", "1.0");
+        response.put("status", "operational");
+        response.put("description", "Submit symptom reports for waterborne disease tracking");
+        
+        java.util.Map<String, String> endpoints = new java.util.HashMap<>();
+        endpoints.put("POST /api/symptoms", "Submit new symptom report (mobile app)");
+        endpoints.put("POST /api/symptoms/reports", "Submit new symptom report (web)");
+        endpoints.put("GET /api/symptoms/reports", "Get all symptom reports");
+        endpoints.put("GET /api/symptoms/statistics", "Get symptom statistics");
+        response.put("endpoints", endpoints);
+        
+        java.util.Map<String, String> exampleRequest = new java.util.HashMap<>();
+        exampleRequest.put("userId", "user_001");
+        exampleRequest.put("location", "Guwahati - Kamakhya");
+        exampleRequest.put("waterSource", "RIVER");
+        exampleRequest.put("symptoms", "[\"DIARRHEA\", \"FEVER\"]");
+        exampleRequest.put("severity", "MODERATE");
+        exampleRequest.put("duration", "DAYS");
+        response.put("exampleRequest", exampleRequest);
+        
+        response.put("documentation", "https://48d5f777fe07.ngrok-free.app/swagger-ui.html");
+        response.put("note", "Use POST method to submit symptom reports");
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    @PostMapping
+    @Operation(summary = "Create a new symptom report (mobile app endpoint)", description = "Submit a new symptom report - mobile app compatible")
+    public ResponseEntity<SymptomReport> createSymptomReportMobile(@Valid @RequestBody SymptomRequest request) {
+        log.info("Creating symptom report for user: {} (mobile endpoint)", request.getUserId());
+        
+        try {
+            SymptomReport report = symptomService.saveSymptomReport(request);
+            
+            // TODO: Check for symptom cluster alerts after saving the report
+            // alertService.checkForSymptomClusterAlerts(request.getLocation());
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(report);
+        } catch (Exception e) {
+            log.error("Error creating symptom report", e);
+            throw e;
+        }
     }
     
     @PostMapping("/reports")

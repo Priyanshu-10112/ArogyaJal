@@ -384,7 +384,6 @@ const Dashboard: React.FC = () => {
     (dashboardData.deviceData.ph !== null && dashboardData.deviceData.ph !== undefined) ||
     (dashboardData.deviceData.turbidity !== null && dashboardData.deviceData.turbidity !== undefined) ||
     (dashboardData.deviceData.totalDissolvedSolids !== null && dashboardData.deviceData.totalDissolvedSolids !== undefined) ||
-    (dashboardData.deviceData.dissolvedOxygen !== null && dashboardData.deviceData.dissolvedOxygen !== undefined) ||
     (dashboardData.deviceData.temperature !== null && dashboardData.deviceData.temperature !== undefined)
   );
 
@@ -432,12 +431,7 @@ const Dashboard: React.FC = () => {
       count++;
     }
     
-    // Dissolved Oxygen (>5 mg/L is good) - ignore if 0
-    if (deviceData.dissolvedOxygen !== undefined && deviceData.dissolvedOxygen !== null && deviceData.dissolvedOxygen > 0) {
-      const doScore = Math.min(100, deviceData.dissolvedOxygen * 10);
-      score += doScore;
-      count++;
-    }
+    // DO sensor not available - not included in WQI calculation
     
     // If less than 3 sensors have valid data, return -1
     return count >= 3 ? Math.round(score / count) : -1;
@@ -589,20 +583,7 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Dissolved Oxygen Card */}
-            <div className="sensor-card">
-              <div className="sensor-header">
-                <span className="sensor-icon">🫧</span>
-                <span className="sensor-title">Dissolved Oxygen</span>
-                <div className={`status-dot ${getStatusClass(dashboardData.deviceData.dissolvedOxygen, 5, 15)}`}></div>
-              </div>
-              <div className="sensor-value">{dashboardData.deviceData.dissolvedOxygen.toFixed(2)} <span className="unit">mg/L</span></div>
-              <div className="sensor-range">Optimal: &gt; 5 mg/L</div>
-              <div className="sensor-description">
-                {dashboardData.deviceData.dissolvedOxygen >= 7 ? 'Excellent' : 
-                 dashboardData.deviceData.dissolvedOxygen >= 5 ? 'Good' : 'Low'}
-              </div>
-            </div>
+            {/* DO sensor not available - removed */}
 
             {/* Temperature Card */}
             <div className="sensor-card">

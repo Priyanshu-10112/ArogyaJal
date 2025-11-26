@@ -122,7 +122,6 @@ State (8 NE states)
 - Temperature (°C)
 - Turbidity (NTU)
 - Total Dissolved Solids (ppm)
-- Conductivity (µS/cm)
 
 **Quality Status:**
 - EXCELLENT (WQI 80-100)
@@ -135,31 +134,163 @@ State (8 NE states)
 - pH < 6.5 or > 8.5 → CRITICAL
 - Turbidity > 5 NTU → HIGH
 - TDS > 500 ppm → MEDIUM
-- Conductivity > 1000 µS/cm → MEDIUM
 
-### 3. Outbreak Prediction
+### 3. Symptom Reporting & Outbreak Prediction
 
-**ML Model:**
-- Algorithm: DBSCAN clustering
-- Input: Symptom reports + Water quality + Location
-- Output: Risk score (0-100) + Confidence (%)
+#### Symptom Reporting Feature
+
+**Purpose:**
+Enable citizens to report waterborne disease symptoms for early outbreak detection.
+
+**User Interface:**
+- Web form accessible from dashboard
+- Mobile-responsive design
+- Simple, intuitive input fields
+
+**Required Fields:**
+```javascript
+{
+  userId: string,           // User identifier (can be anonymous)
+  location: string,         // GPS coordinates or address
+  symptoms: string[],       // Array: ["DIARRHEA", "VOMITING", "FEVER", "NAUSEA", "ABDOMINAL_PAIN"]
+  severity: string,         // "MILD", "MODERATE", "SEVERE"
+  waterSource: string,      // "TAP", "WELL", "RIVER", "POND", "HANDPUMP"
+  duration: string,         // "HOURS", "DAYS", "WEEKS"
+  reportedAt: Timestamp     // Auto-generated
+}
+```
+
+**Submission Workflow:**
+1. User accesses symptom reporting form
+2. Fills required fields (location auto-detected if GPS enabled)
+3. Submits report via `POST /api/symptoms/reports`
+4. Backend validates and stores in Firestore
+5. ML service picks up new report in next cycle (60s)
+6. User receives confirmation message
+
+**Privacy:**
+- Reports can be submitted anonymously
+- Location is required but user identity is optional
+- Data used only for outbreak detection
+
+#### ML-Based Outbreak Prediction
+
+**Algorithm: DBSCAN (Density-Based Spatial Clustering)**
+
+**Why DBSCAN?**
+- Identifies clusters of arbitrary shape
+- Handles noise (isolated reports)
+- No need to specify number of clusters
+- Perfect for geographic data
+
+**Parameters:**
+- **eps (epsilon)**: 5 kilometers
+  - Rationale: Typical waterborne disease spread radius
+  - Reports within 5km considered "neighbors"
+- **min_samples**: 3 reports
+  - Rationale: Minimum for statistical significance
+  - Prevents false alarms from isolated cases
+
+**Clustering Process:**
+1. Fetch all symptom reports from last 7 days
+2. Convert locations to coordinates (lat, lon)
+3. Apply DBSCAN with eps=5km, min_samples=3
+4. Identify core points (reports with ≥3 neighbors within 5km)
+5. Form clusters by connecting core points
+6. Label noise points (isolated reports)
+
+**Risk Score Calculation (0-100):**
+
+```python
+# Cluster Factor (0-50 points)
+cluster_factor = min(cluster_count × 10, 50)
+# More clusters = higher risk, capped at 50
+
+# Report Factor (0-20 points)
+report_factor = min(total_reports / 10, 20)
+# More reports = higher risk, capped at 20
+
+# Quality Factor (0-20 points)
+poor_sensors = count(sensors where WQI > 75)
+quality_factor = (poor_sensors / total_sensors) × 20
+# More poor quality sensors = higher risk
+
+# Water Source Factor (0-10 points)
+contaminated_sources = count(sources with recent issues)
+source_factor = (contaminated_sources / total_sources) × 10
+# More contaminated sources = higher risk
+
+# Total Risk Score
+risk_score = cluster_factor + report_factor + quality_factor + source_factor
+# Range: 0-100
+```
 
 **Risk Levels:**
-- CRITICAL: 75-100
-- HIGH: 50-75
-- MEDIUM: 25-50
-- LOW: 0-25
+- **CRITICAL (75-100)**: Immediate action required
+  - Multiple large clusters
+  - High report volume
+  - Poor water quality widespread
+- **HIGH (50-75)**: Close monitoring needed
+  - Several clusters detected
+  - Moderate report volume
+  - Some water quality issues
+- **MEDIUM (25-50)**: Watch situation
+  - Few small clusters
+  - Low report volume
+  - Isolated water quality issues
+- **LOW (0-25)**: Normal conditions
+  - No significant clusters
+  - Minimal reports
+  - Good water quality overall
 
-**Contributing Factors:**
-- Cluster Factor (0-50 points)
-- Report Factor (0-20 points)
-- Quality Factor (0-20 points)
-- Water Source Factor (0-10 points)
+**Confidence Calculation:**
+
+```python
+# Data Completeness Score
+required_data_points = {
+  'symptom_reports': 10,      # At least 10 reports
+  'water_sensors': 5,         # At least 5 sensors
+  'recent_data': True,        # Data within 24 hours
+  'geographic_coverage': 0.8  # 80% of region covered
+}
+
+available_points = count_available_data()
+confidence = (available_points / required_data_points) × 100
+
+# Confidence Interpretation
+# 80-100%: High confidence - reliable prediction
+# 60-80%: Moderate confidence - use with caution
+# <60%: Low confidence - insufficient data
+```
+
+**Geographic Correlation Logic:**
+
+1. **Spatial Analysis:**
+   - For each symptom cluster, find nearest water sensors (within 10km)
+   - Calculate average WQI of nearby sensors
+   - If avg WQI > 75 (Poor/Very Poor) → Strong correlation
+
+2. **Temporal Analysis:**
+   - Check if water quality declined before symptom reports increased
+   - Time lag: 1-3 days (typical incubation period)
+   - If quality dropped 3 days ago and reports spiked now → Likely causation
+
+3. **Symptom-Parameter Matching:**
+   - Diarrhea + High Turbidity → Bacterial contamination likely
+   - Vomiting + High TDS → Chemical contamination possible
+   - Fever + Poor overall WQI → Multiple contaminants
+
+4. **Risk Amplification:**
+   - Cluster near poor sensor + declining trend → Risk × 1.5
+   - Multiple clusters + widespread poor quality → Risk × 2.0
+   - Isolated cluster + good water quality → Risk × 0.5
 
 **Update Frequency:**
-- Prediction: Every 60 seconds
-- Clustering: On new symptom reports
-- Dashboard: Auto-refresh 30s
+- **ML Processing**: Every 60 seconds
+- **Clustering**: Triggered by new reports or scheduled
+- **Risk Calculation**: After each clustering run
+- **Dashboard Update**: Auto-refresh every 30 seconds
+- **Alert Generation**: Immediate if risk crosses threshold
 
 ### 4. Alert Management
 
@@ -319,6 +450,67 @@ Response: Array of DeviceRegistry objects
 Note: All parameters are optional
 ```
 
+### Symptom Report Endpoints
+
+#### Submit Symptom Report
+```http
+POST /api/symptoms/reports
+Content-Type: application/json
+
+Request Body:
+{
+  "userId": "user_001",
+  "location": "Guwahati - Kamakhya",
+  "symptoms": ["DIARRHEA", "FEVER"],
+  "severity": "MODERATE",
+  "waterSource": "HANDPUMP",
+  "duration": "DAYS"
+}
+
+Response: 201 Created
+{
+  "id": "report_12345",
+  "userId": "user_001",
+  "location": "Guwahati - Kamakhya",
+  "symptoms": ["DIARRHEA", "FEVER"],
+  "severity": "MODERATE",
+  "waterSource": "HANDPUMP",
+  "duration": "DAYS",
+  "reportedAt": "2025-11-26T10:30:00Z",
+  "status": "PENDING"
+}
+```
+
+#### Get All Symptom Reports
+```http
+GET /api/symptoms/reports
+Response: Array of SymptomReport objects
+```
+
+#### Get Reports by Location
+```http
+GET /api/symptoms/reports/location/{location}
+Response: Array of SymptomReport objects for specified location
+```
+
+#### Get Reports by User
+```http
+GET /api/symptoms/reports/user/{userId}
+Response: Array of SymptomReport objects for specified user
+```
+
+#### Get Reports by Severity
+```http
+GET /api/symptoms/reports/severity/{severity}
+Response: Array of SymptomReport objects (MILD, MODERATE, SEVERE)
+```
+
+#### Get Reports by Time Range
+```http
+GET /api/symptoms/reports/time-range?startSeconds={start}&endSeconds={end}
+Response: Array of SymptomReport objects within time range
+```
+
 ### ML Endpoints
 
 #### Get Latest Outbreak Prediction
@@ -365,8 +557,6 @@ Cache: 30 seconds
   ph: number,
   temperature: number,
   turbidity: number,
-  dissolvedOxygen: number,
-  conductivity: number,
   totalDissolvedSolids: number,
   timestamp: Timestamp,
   qualityStatus: string,
@@ -485,6 +675,69 @@ PORT=5000
 
 ## User Guide
 
+### For Citizens: Reporting Symptoms
+
+**When to Report:**
+- Experiencing waterborne disease symptoms (diarrhea, vomiting, fever, nausea)
+- Symptoms started after consuming water from local source
+- Multiple family members affected
+
+**How to Submit a Report:**
+
+1. **Access the Reporting Form**
+   - Open ArogyaJal dashboard
+   - Click "Report Symptoms" button
+   - Or use mobile app (if available)
+
+2. **Fill Required Information**
+   - **Location**: Auto-detected via GPS or enter manually
+   - **Symptoms**: Select all that apply
+     - Diarrhea
+     - Vomiting
+     - Fever
+     - Nausea
+     - Abdominal Pain
+     - Other
+   - **Severity**: 
+     - Mild (manageable, no medical attention)
+     - Moderate (uncomfortable, considering doctor)
+     - Severe (requires immediate medical attention)
+   - **Water Source**: Where did you get drinking water?
+     - Tap water
+     - Well
+     - River
+     - Pond
+     - Handpump
+     - Other
+   - **Duration**: How long have you had symptoms?
+     - Hours
+     - Days
+     - Weeks
+
+3. **Submit Report**
+   - Review information
+   - Click "Submit Report"
+   - Receive confirmation message
+
+4. **What Happens Next**
+   - Report stored in system
+   - ML service analyzes within 60 seconds
+   - If cluster detected, health officials notified
+   - Water quality team may investigate nearby sources
+   - You may be contacted for follow-up (if contact info provided)
+
+**Privacy & Anonymity:**
+- Reports can be submitted anonymously
+- Location is required for outbreak detection
+- Personal identity is optional
+- Data used only for public health purposes
+
+**Important Notes:**
+- This is NOT a substitute for medical care
+- Seek immediate medical attention for severe symptoms
+- Report helps identify outbreak patterns
+- Your report may help protect your community
+
 ### For Health Officials
 
 **Dashboard Overview:**
@@ -553,6 +806,28 @@ PORT=5000
 - Verify symptom reports exist
 - Check clustering parameters
 
+**Issue: Symptom report not appearing in clusters**
+- Wait 60 seconds for ML processing cycle
+- Check if report meets clustering criteria (≥3 reports within 5km)
+- Verify location coordinates are valid
+- Check if report is within last 7 days
+
+**Issue: Risk score seems incorrect**
+- Verify all contributing factors:
+  - Cluster count (check /api/symptom-clusters)
+  - Total reports (check /api/symptoms/reports)
+  - Water quality sensors (check /api/sensors/readings)
+  - Water source status
+- Check ML service logs for calculation details
+- Ensure data is recent (within 24 hours for high confidence)
+
+**Issue: Cannot submit symptom report**
+- Check if all required fields are filled
+- Verify location format (coordinates or address)
+- Check backend API is running
+- Verify Firestore connection
+- Check browser console for errors
+
 ---
 
 ## Performance Optimization
@@ -576,6 +851,100 @@ PORT=5000
 
 ---
 
+## Glossary of Terms
+
+### Core Concepts
+
+**Symptom Reporting**
+- User-submitted health reports indicating potential waterborne illness
+- Includes location, symptoms, severity, and water source information
+
+**Symptom Clustering**
+- DBSCAN-based grouping of geographically proximate symptom reports
+- Identifies patterns that may indicate disease outbreaks
+
+**Outbreak Detection**
+- Identification of symptom clusters that exceed threshold (≥3 reports within 5km)
+- Triggers investigation and monitoring
+
+**Risk Assessment**
+- Comprehensive evaluation of outbreak likelihood
+- Considers clusters, water quality, reports, and sources
+
+**Outbreak Risk Prediction**
+- ML-calculated score (0-100) indicating probability of disease outbreak
+- Updated every 60 seconds based on latest data
+
+**Prediction Confidence**
+- Percentage (0-100%) indicating reliability of risk prediction
+- Based on data completeness, recency, and geographic coverage
+
+**Geographic Correlation**
+- Spatial and temporal analysis linking symptom clusters to water quality issues
+- Identifies potential contamination sources
+
+**Water Quality Index (WQI)**
+- Composite score (0-100+) indicating overall water quality
+- Lower is better: 0-25 Excellent, 26-50 Good, 51-75 Fair, 76-90 Poor, >90 Very Poor
+
+**DBSCAN Parameters**
+- **eps (epsilon)**: 5km - maximum distance between neighboring points
+- **min_samples**: 3 - minimum reports to form a cluster
+
+### Risk Levels
+
+**CRITICAL (75-100)**
+- Immediate action required
+- Multiple large clusters detected
+- Widespread poor water quality
+
+**HIGH (50-75)**
+- Close monitoring needed
+- Several clusters present
+- Moderate water quality issues
+
+**MEDIUM (25-50)**
+- Watch situation
+- Few small clusters
+- Isolated quality issues
+
+**LOW (0-25)**
+- Normal conditions
+- No significant patterns
+- Good water quality
+
+### Alert Types
+
+**WATER_QUALITY**
+- Triggered by sensor parameter violations
+- Examples: pH out of range, high turbidity
+
+**SENSOR_HEALTH**
+- Device malfunction or connectivity issues
+- Examples: Low battery, no data transmission
+
+**SYMPTOM_CLUSTER**
+- Outbreak pattern detected by ML
+- Examples: Multiple reports in same area
+
+### Data Sources
+
+**IoT Sensors**
+- ESP32-based devices measuring water parameters
+- Transmit data via HTTP/MQTT
+
+**Symptom Reports**
+- Citizen-submitted health reports
+- Stored in Firestore database
+
+**Device Registry**
+- Master list of all sensors with locations
+- Used for filtering and mapping
+
+**Outbreak Predictions**
+- ML-generated risk scores
+- Cached for 60 seconds
+
 ## Future Enhancements
 
 1. **Mobile App**: Native iOS/Android apps
@@ -589,6 +958,145 @@ PORT=5000
 
 ---
 
-**Document Version**: 1.0.0  
-**Last Updated**: November 25, 2025  
-**Status**: Production Ready ✅
+## Recent Updates (November 26, 2025)
+
+### Frontend Optimization for SIH Demo
+
+#### ✅ Critical Fixes Implemented
+
+**1. WQI Label Consistency**
+- **Problem**: WQI 50.0 labeled as "GOOD" in some places, "FAIR" in others
+- **Solution**: Created centralized `waterQuality.ts` utility
+- **Standard Classification**:
+  ```
+  0-25   → Excellent (Green #10b981)
+  26-50  → Good (Green #22c55e)
+  51-75  → Fair (Amber #f59e0b)
+  76-90  → Poor (Orange #f97316)
+  >90    → Very Poor (Red #ef4444)
+  ```
+- **Impact**: Consistent labeling across Dashboard, Map, ML Dashboard, Trends pages
+
+**2. Trends Page Enhancements**
+- **Fixed**: pH chart Y-axis from 0-1 to proper 0-14 scale
+- **Added**: Comprehensive "No Historical Data Available" empty state
+- **Improved**: Context-aware messaging based on active filters
+- **Changed**: "N/A" to "No data" for better clarity
+
+**3. Device Health Display**
+- **Battery**: Shows percentage or "Not reported" (not just "%")
+- **Signal**: Shows status or "Not reported" (not "Unknown (dBm)")
+- **Uptime**: Human-readable format (e.g., "1d 4h") or "Not available"
+- **Warnings**: Aligned with actual battery levels (<30% = warning)
+
+**4. Location Display**
+- **Fixed**: Leading comma bug (", Barpeta" → "Barpeta")
+- **Added**: `formatLocation()` utility for clean strings
+- **Improved**: Coordinate-to-name mapping
+
+**5. Device Management**
+- **Deduplication**: Only latest reading per device shown in ML Dashboard
+- **Test Devices**: Tagged with "(Test Device)" label
+- **No Duplicates**: Eliminated multiple cards with different timestamps
+
+**6. Code Quality**
+- **ESLint**: All warnings resolved
+- **React Hooks**: Proper dependencies with useCallback
+- **Performance**: Optimized re-renders
+- **Clean Code**: Removed unused imports and variables
+
+#### 📁 New Files Created
+
+**`DashBoard_Frontend/src/utils/waterQuality.ts`** (350+ lines)
+- `getWaterQualityClassification(wqi)` - Returns label, severity, color, description
+- `getBatteryStatus(percentage, voltage)` - Battery health with warnings
+- `getSignalStatus(strength)` - Signal strength classification
+- `formatUptime(seconds, lastSeen)` - Human-readable uptime
+- `formatLocation(location)` - Clean location strings
+- `getDeviceFriendlyName(deviceId, location)` - User-friendly names
+- `isTestDevice(deviceId)` - Test device detection
+- `WQI_LEGEND` - Standardized legend data for all pages
+
+#### 📝 Modified Components
+
+**`DeviceHealthCard.tsx`**
+- Integrated centralized WQI classification
+- Fixed battery/signal/uptime display
+- Added test device tagging
+- Cleaned location display
+
+**`MapPage.tsx`**
+- Unified legend using WQI_LEGEND constant
+- Consistent marker colors
+- Added WQI label in sensor popups
+
+**`Trends.tsx`**
+- Fixed pH chart Y-axis (0-14)
+- Better empty state handling
+- Improved data availability checks
+
+**`MLDashboard.tsx`**
+- Implemented sensor deduplication
+- Shows only latest reading per device
+
+#### 🐛 Known Issues (Backend Requirements)
+
+**1. WQI Calculation**
+- **Current**: Returns constant 50.0 for most devices
+- **Required**: Implement actual calculation based on sensor parameters
+- **Formula**: Weighted average of pH, TDS, turbidity, temperature (4 core parameters)
+- **Frontend Status**: ✅ Displays consistently with proper labels
+
+**2. Device Telemetry**
+- **Current**: Battery, signal, uptime data not available
+- **Required**: IoT devices should send battery voltage, RSSI, uptime
+- **Frontend Status**: ✅ Handles gracefully with "Not reported" messages
+
+**3. Test Device Filtering**
+- **Current**: TEST-VERIFY-001 appears in production
+- **Recommendation**: Add `isTestDevice` flag in device registry
+- **Frontend Status**: ✅ Tags test devices clearly
+
+#### 📊 Before vs After
+
+**WQI Display:**
+```
+Before: WQI 50.0 = "GOOD" (inconsistent)
+After:  WQI 50.0 = "Good" (consistent everywhere)
+```
+
+**Trends Page:**
+```
+Before: pH chart 0-1 scale, empty charts with no explanation
+After:  pH chart 0-14 scale, clear "No data" messaging
+```
+
+**Device Health:**
+```
+Before: Battery: %  |  Signal: Unknown (dBm)  |  Uptime: N/A
+After:  Battery: 85% or "Not reported"  |  Signal: Good (-65 dBm) or "Not reported"  |  Uptime: 1d 4h or "Not available"
+```
+
+#### 🎯 Demo Readiness
+
+**Status**: ✅ **PRODUCTION READY FOR SIH DEMO**
+
+All frontend issues resolved. The application now presents:
+- Professional, polished interface
+- Consistent labeling and terminology
+- Clear messaging for missing data
+- No confusing placeholders or technical jargon
+- Proper handling of edge cases
+- Clean, maintainable code
+
+**Recommended Next Steps (Backend Team)**:
+1. Implement actual WQI calculation logic
+2. Ensure IoT devices send battery/signal telemetry
+3. Add `isTestDevice` flag to device registry
+4. Review and test complete flow end-to-end
+
+---
+
+**Document Version**: 1.1.0  
+**Last Updated**: November 26, 2025  
+**Status**: Production Ready ✅ (Frontend optimized for SIH Demo)

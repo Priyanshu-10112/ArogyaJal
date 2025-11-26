@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useGlobalFilter } from '../contexts/GlobalFilterContext';
+import { useGlobalFilter } from '../../contexts/GlobalFilterContext';
+import { useToast } from '../../contexts/ToastContext';
 import { MapContainer, TileLayer, CircleMarker, Popup, Circle } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { coordsToLocation, getAllowedDeviceIds } from '../utils/locationMapper';
-import '../App.css';
+import { coordsToLocation, getAllowedDeviceIds } from '../../utils/locationMapper';
+import { getWaterQualityClassification, WQI_LEGEND } from '../../utils/waterQuality';
+import '../../App.css';
 
 // Interfaces
 interface SensorData {
@@ -15,8 +17,6 @@ interface SensorData {
   temperature?: number;
   ph?: number;
   turbidity?: number;
-  dissolvedOxygen?: number;
-  conductivity?: number;
   totalDissolvedSolids?: number;
   timestamp: string;
   wqi?: number;
@@ -44,19 +44,56 @@ interface Cluster {
 
 const MapPage: React.FC = () => {
   const { filter } = useGlobalFilter();
+  const { addToast } = useToast();
   const [isClient, setIsClient] = useState(false);
   const [sensors, setSensors] = useState<SensorData[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
   const [showClusters, setShowClusters] = useState(true);
-  
-  // North East India region center (Assam/Meghalaya area)
-  const center: [number, number] = [26.2006, 92.9376]; // Guwahati, Assam - NER Hub
+  const [mapKey, setMapKey] = useState(0); // Force map re-render
+
+  // Calculate map center and zoom based on filtered sensors
+  const getMapCenterAndZoom = (): { center: [number, number]; zoom: number } => {
+    if (sensors.length === 0) {
+      // Default: North East India region center
+      return { center: [26.2006, 92.9376], zoom: 7 };
+    }
+
+    // Calculate bounds of all sensors
+    const lats = sensors.map(s => s.latitude);
+    const lngs = sensors.map(s => s.longitude);
+
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+
+    // Center point
+    const centerLat = (minLat + maxLat) / 2;
+    const centerLng = (minLng + maxLng) / 2;
+
+    // Calculate zoom based on spread
+    const latDiff = maxLat - minLat;
+    const lngDiff = maxLng - minLng;
+    const maxDiff = Math.max(latDiff, lngDiff);
+
+    // Determine zoom level
+    let zoom = 7; // Default
+    if (maxDiff < 0.01) zoom = 14; // Very close sensors (village level)
+    else if (maxDiff < 0.05) zoom = 12; // City level
+    else if (maxDiff < 0.2) zoom = 10; // District level
+    else if (maxDiff < 1) zoom = 8; // State level
+    else zoom = 7; // Region level
+
+    return { center: [centerLat, centerLng], zoom };
+  };
+
+  const { center, zoom } = getMapCenterAndZoom();
 
   const fetchMapData = useCallback(async () => {
     const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
-    
+
     try {
       // Get allowed device IDs based on global filter
       const allowedDeviceIds = await getAllowedDeviceIds({
@@ -65,13 +102,13 @@ const MapPage: React.FC = () => {
         city: filter.city,
         village: filter.village
       });
-      
+
       // Fetch sensors with readings
       try {
         const sensorsResponse = await fetch(`${API_BASE}/api/sensors/readings`);
         if (sensorsResponse.ok) {
           const sensorsData = await sensorsResponse.json();
-          
+
           // Transform data: parse location string to lat/lng
           const transformedSensors = sensorsData.map((sensor: any) => {
             const [lat, lng] = sensor.location ? sensor.location.split(',').map(Number) : [0, 0];
@@ -81,9 +118,19 @@ const MapPage: React.FC = () => {
               longitude: lng || 0
             };
           }).filter((s: any) => s.latitude !== 0 && s.longitude !== 0);
-          
+
+          // Get only latest reading per sensor (deduplicate)
+          const latestSensors = new Map<string, any>();
+          transformedSensors.forEach((sensor: any) => {
+            const existing = latestSensors.get(sensor.sensorId);
+            if (!existing || new Date(sensor.timestamp) > new Date(existing.timestamp)) {
+              latestSensors.set(sensor.sensorId, sensor);
+            }
+          });
+          const uniqueSensors = Array.from(latestSensors.values());
+
           // Filter sensors based on allowed device IDs
-          const filteredSensors = transformedSensors.filter((sensor: SensorData) => {
+          const filteredSensors = uniqueSensors.filter((sensor: SensorData) => {
             // If no filter, show all
             if (allowedDeviceIds.size === 0 && !filter.state && !filter.district && !filter.city && !filter.village) {
               return true;
@@ -98,7 +145,7 @@ const MapPage: React.FC = () => {
             }
             return true;
           });
-          
+
           setSensors(filteredSensors);
         } else {
           console.warn('Failed to fetch sensors:', sensorsResponse.status);
@@ -112,7 +159,7 @@ const MapPage: React.FC = () => {
         const alertsResponse = await fetch(`${API_BASE}/api/alerts`);
         if (alertsResponse.ok) {
           const alertsData = await alertsResponse.json();
-          
+
           // Filter alerts based on allowed device IDs
           const filteredAlerts = alertsData.filter((alert: Alert) => {
             // If no filter, show all
@@ -129,7 +176,7 @@ const MapPage: React.FC = () => {
             }
             return true;
           });
-          
+
           setAlerts(filteredAlerts);
         } else {
           console.warn('Failed to fetch alerts:', alertsResponse.status);
@@ -154,40 +201,31 @@ const MapPage: React.FC = () => {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching map data:', error);
+      addToast('Failed to load map data', 'error');
+    } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, addToast]);
 
   useEffect(() => {
     setIsClient(true);
     fetchMapData();
-    
+
     // Refresh every 15 seconds for near real-time updates
     const interval = setInterval(fetchMapData, 15000);
     return () => clearInterval(interval);
   }, [fetchMapData]);
 
-  // Get color based on water quality
-  const getQualityColor = (sensor: SensorData): string => {
-    // If WQI available, use it
-    if (sensor.wqi !== undefined && sensor.wqi !== null) {
-      if (sensor.wqi >= 80) return '#10b981'; // Green - Excellent
-      if (sensor.wqi >= 60) return '#3b82f6'; // Blue - Good
-      if (sensor.wqi >= 40) return '#f59e0b'; // Orange - Fair
-      if (sensor.wqi >= 20) return '#ef4444'; // Red - Poor
-      return '#991b1b'; // Dark Red - Very Poor
+  // Force map re-render when sensors change (for auto-zoom)
+  useEffect(() => {
+    if (sensors.length > 0) {
+      setMapKey(prev => prev + 1);
     }
+  }, [sensors.length, filter.state, filter.district, filter.city, filter.village]);
 
-    // Fallback: Check individual parameters
-    const issues = [];
-    if (sensor.ph && (sensor.ph < 6.5 || sensor.ph > 8.5)) issues.push('pH');
-    if (sensor.turbidity && sensor.turbidity > 5) issues.push('turbidity');
-    // DO sensor not available
-    if (sensor.temperature && sensor.temperature > 30) issues.push('temp');
-
-    if (issues.length === 0) return '#10b981'; // Green - Good
-    if (issues.length === 1) return '#f59e0b'; // Orange - Warning
-    return '#ef4444'; // Red - Critical
+  // Get color based on water quality using centralized utility
+  const getQualityColor = (sensor: SensorData): string => {
+    return getWaterQualityClassification(sensor.wqi).color;
   };
 
   // Get severity color for clusters
@@ -213,7 +251,7 @@ const MapPage: React.FC = () => {
       const now = new Date();
       const diffMs = now.getTime() - date.getTime();
       const diffMins = Math.floor(diffMs / 60000);
-      
+
       if (diffMins < 1) return 'Just now';
       if (diffMins < 60) return `${diffMins}m ago`;
       const diffHours = Math.floor(diffMins / 60);
@@ -251,14 +289,14 @@ const MapPage: React.FC = () => {
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}>
-            <input 
-              type="checkbox" 
-              checked={showClusters} 
+            <input
+              type="checkbox"
+              checked={showClusters}
               onChange={(e) => setShowClusters(e.target.checked)}
             />
             Show Clusters
           </label>
-          <button 
+          <button
             onClick={fetchMapData}
             style={{
               padding: '8px 16px',
@@ -274,37 +312,23 @@ const MapPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Legend */}
-      <div style={{ 
-        background: 'white', 
-        padding: '12px', 
-        borderRadius: '8px', 
+      {/* Legend - Using centralized WQI legend */}
+      <div style={{
+        background: 'white',
+        padding: '12px',
+        borderRadius: '8px',
         marginBottom: '1rem',
         display: 'flex',
         gap: '20px',
         flexWrap: 'wrap'
       }}>
         <div style={{ fontWeight: 'bold' }}>Legend:</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#10b981' }}></div>
-          <span>Excellent (WQI 80+)</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#3b82f6' }}></div>
-          <span>Good (WQI 60-80)</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f59e0b' }}></div>
-          <span>Fair (WQI 40-60)</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ef4444' }}></div>
-          <span>Poor (WQI 20-40)</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#991b1b' }}></div>
-          <span>Very Poor (WQI &lt;20)</span>
-        </div>
+        {WQI_LEGEND.map((item, index) => (
+          <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: item.color }}></div>
+            <span>{item.label} (WQI {item.range})</span>
+          </div>
+        ))}
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.3)', border: '2px solid #ef4444' }}></div>
           <span>Outbreak Cluster</span>
@@ -312,10 +336,10 @@ const MapPage: React.FC = () => {
       </div>
 
       {/* Stats */}
-      <div style={{ 
-        background: 'white', 
-        padding: '12px', 
-        borderRadius: '8px', 
+      <div style={{
+        background: 'white',
+        padding: '12px',
+        borderRadius: '8px',
         marginBottom: '1rem',
         display: 'flex',
         gap: '20px'
@@ -326,28 +350,29 @@ const MapPage: React.FC = () => {
       </div>
 
       <div className="map-container" style={{ height: '600px', width: '100%', borderRadius: '8px', overflow: 'hidden' }}>
-        <MapContainer 
-          center={center} 
-          zoom={7} 
+        <MapContainer
+          key={mapKey}
+          center={center}
+          zoom={zoom}
           style={{ height: '100%', width: '100%' }}
         >
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
-          
+
           {/* Sensor Markers */}
           {sensors.map((sensor, index) => {
             const sensorAlerts = getSensorAlerts(sensor.sensorId);
             const color = getQualityColor(sensor);
-            
+
             // Add small offset to prevent overlapping markers at same location
             // Create a spiral pattern for overlapping markers
             const offset = 0.0005; // ~50 meters
             const angle = (index * 45) * (Math.PI / 180); // 45 degrees apart
             const latOffset = Math.cos(angle) * offset * (Math.floor(index / 8) + 1);
             const lngOffset = Math.sin(angle) * offset * (Math.floor(index / 8) + 1);
-            
+
             return (
               <CircleMarker
                 key={sensor.id}
@@ -371,14 +396,14 @@ const MapPage: React.FC = () => {
                     <p style={{ margin: '5px 0', color: '#6b7280', fontSize: '12px' }}>
                       🕐 {formatTime(sensor.timestamp)}
                     </p>
-                    
+
                     <hr style={{ margin: '10px 0', border: 'none', borderTop: '1px solid #e5e7eb' }} />
-                    
+
                     <div style={{ fontSize: '13px' }}>
                       <strong>Current Readings:</strong>
                       {sensor.wqi !== undefined && sensor.wqi !== null && (
                         <div style={{ margin: '5px 0' }}>
-                          💧 <strong>WQI:</strong> {sensor.wqi.toFixed(1)}
+                          💧 <strong>WQI:</strong> {sensor.wqi.toFixed(1)} ({getWaterQualityClassification(sensor.wqi).label})
                         </div>
                       )}
                       {sensor.temperature !== undefined && sensor.temperature !== null && (
@@ -396,12 +421,6 @@ const MapPage: React.FC = () => {
                           🌫️ <strong>Turbidity:</strong> {sensor.turbidity.toFixed(2)} NTU
                         </div>
                       )}
-                      {/* DO sensor not available - removed */}
-                      {sensor.conductivity !== undefined && sensor.conductivity !== null && (
-                        <div style={{ margin: '5px 0' }}>
-                          ⚡ <strong>Conductivity:</strong> {sensor.conductivity.toFixed(0)} µS/cm
-                        </div>
-                      )}
                       {sensor.totalDissolvedSolids !== undefined && sensor.totalDissolvedSolids !== null && (
                         <div style={{ margin: '5px 0' }}>
                           🧪 <strong>TDS:</strong> {sensor.totalDissolvedSolids.toFixed(0)} ppm
@@ -415,12 +434,12 @@ const MapPage: React.FC = () => {
                         <div style={{ fontSize: '13px' }}>
                           <strong style={{ color: '#ef4444' }}>🚨 Active Alerts ({sensorAlerts.length}):</strong>
                           {sensorAlerts.slice(0, 3).map((alert, idx) => (
-                            <div 
+                            <div
                               key={idx}
-                              style={{ 
-                                margin: '5px 0', 
-                                padding: '5px', 
-                                background: '#fef2f2', 
+                              style={{
+                                margin: '5px 0',
+                                padding: '5px',
+                                background: '#fef2f2',
                                 borderRadius: '4px',
                                 fontSize: '12px'
                               }}
@@ -469,8 +488,8 @@ const MapPage: React.FC = () => {
                       📊 <strong>Reports:</strong> {cluster.reportCount}
                     </div>
                     <div style={{ margin: '5px 0' }}>
-                      ⚠️ <strong>Severity:</strong> 
-                      <span style={{ 
+                      ⚠️ <strong>Severity:</strong>
+                      <span style={{
                         color: getClusterColor(cluster.overallSeverity),
                         fontWeight: 'bold',
                         marginLeft: '5px'
@@ -490,10 +509,10 @@ const MapPage: React.FC = () => {
       </div>
 
       {sensors.length === 0 && (
-        <div style={{ 
-          textAlign: 'center', 
-          padding: '20px', 
-          background: '#fef3c7', 
+        <div style={{
+          textAlign: 'center',
+          padding: '20px',
+          background: '#fef3c7',
           borderRadius: '8px',
           marginTop: '1rem'
         }}>

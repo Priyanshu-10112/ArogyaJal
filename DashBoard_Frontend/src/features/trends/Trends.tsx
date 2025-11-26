@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Line, Pie } from 'react-chartjs-2';
-import { useGlobalFilter } from '../contexts/GlobalFilterContext';
-import { getAllowedDeviceIds } from '../utils/locationMapper';
-import '../App.css';
+import { useGlobalFilter } from '../../contexts/GlobalFilterContext';
+import { useToast } from '../../contexts/ToastContext';
+import { getAllowedDeviceIds } from '../../utils/locationMapper';
+import { getStatusColor } from '../../utils/statusConfig';
+import '../../App.css';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,13 +18,11 @@ import {
   ArcElement,
 } from 'chart.js';
 import {
-  getWaterQualityTrends,
-  getDeviceIds,
   getAllSensorReadings,
   type TrendsResponse,
   type SensorReading,
   type DataPoint,
-} from '../services/api.service';
+} from '../../services/api.service';
 
 // Register ChartJS components
 ChartJS.register(
@@ -48,11 +48,11 @@ const PARAMETERS: ParameterConfig[] = [
   { label: 'Temperature', color: 'rgb(255, 99, 132)', unit: '°C', key: 'temperature' },
   { label: 'Turbidity', color: 'rgb(255, 205, 86)', unit: 'NTU', key: 'turbidity' },
   { label: 'Total Dissolved Solids', color: 'rgb(54, 162, 235)', unit: 'ppm', key: 'totalDissolvedSolids' },
-  { label: 'Conductivity', color: 'rgb(153, 102, 255)', unit: 'μS/cm', key: 'conductivity' },
 ];
 
 const Trends: React.FC = () => {
   const { filter, getBreadcrumb } = useGlobalFilter();
+  const { addToast } = useToast();
   const [trendsData, setTrendsData] = useState<TrendsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,28 +63,7 @@ const Trends: React.FC = () => {
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  useEffect(() => {
-    fetchDeviceIds();
-    fetchAllReadings();
-  }, [filter]);
-
-  useEffect(() => {
-    fetchTrends();
-  }, [timeRange, filter]);
-
-  // Auto-refresh effect
-  useEffect(() => {
-    if (!autoRefresh) return;
-
-    const interval = setInterval(() => {
-      fetchTrends();
-      fetchAllReadings();
-    }, 10000); // 10 seconds
-
-    return () => clearInterval(interval);
-  }, [autoRefresh, timeRange]);
-
-  const fetchDeviceIds = async () => {
+  const fetchDeviceIds = useCallback(async () => {
     try {
       // Get allowed device IDs based on global filter
       const allowedDeviceIds = await getAllowedDeviceIds({
@@ -93,16 +72,18 @@ const Trends: React.FC = () => {
         city: filter.city,
         village: filter.village
       });
-      
+
       // Convert Set to Array
       const filteredIds = Array.from(allowedDeviceIds);
       setDeviceIds(filteredIds);
     } catch (err) {
       console.error('Error fetching device IDs:', err);
+      addToast('Failed to fetch device IDs', 'error');
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
-  const fetchAllReadings = async () => {
+  const fetchAllReadings = useCallback(async () => {
     try {
       // Get allowed device IDs based on global filter
       const allowedDeviceIds = await getAllowedDeviceIds({
@@ -111,7 +92,7 @@ const Trends: React.FC = () => {
         city: filter.city,
         village: filter.village
       });
-      
+
       const readings = await getAllSensorReadings();
       // Filter readings based on allowed device IDs
       const filteredReadings = readings.filter(reading => {
@@ -132,10 +113,12 @@ const Trends: React.FC = () => {
       setAllReadings(filteredReadings);
     } catch (err) {
       console.error('Error fetching all readings:', err);
+      addToast('Failed to fetch sensor readings', 'error');
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter]);
 
-  const fetchTrends = async () => {
+  const fetchTrends = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -146,10 +129,10 @@ const Trends: React.FC = () => {
         city: filter.city,
         village: filter.village
       });
-      
+
       // Fetch all readings and transform them into trends format
       const readings = await getAllSensorReadings();
-      
+
       // Helper function to convert timestamp to Date
       const parseTimestamp = (timestamp: string | { seconds: number; nanos: number }): Date => {
         if (typeof timestamp === 'string') {
@@ -162,22 +145,22 @@ const Trends: React.FC = () => {
       // Filter readings by time range AND global filter
       const now = new Date();
       const cutoffTime = new Date(now.getTime() - timeRange * 60 * 60 * 1000);
-      
+
       const filteredReadings = readings.filter(reading => {
         // Time range filter
         const readingTime = parseTimestamp(reading.timestamp);
         if (readingTime < cutoffTime) return false;
-        
+
         // Global filter - Check if device is in allowed list
         if (allowedDeviceIds.size > 0 && !allowedDeviceIds.has(reading.sensorId)) {
           return false;
         }
-        
+
         // Global filter - Specific device
         if (filter.deviceId && reading.sensorId !== filter.deviceId) {
           return false;
         }
-        
+
         return true;
       });
 
@@ -208,7 +191,7 @@ const Trends: React.FC = () => {
         latestValues,
         timeRange: `${timeRange} hours`
       });
-      
+
       // Set filtered readings for pie charts
       setAllReadings(filteredReadings);
       setLastUpdated(new Date());
@@ -218,7 +201,29 @@ const Trends: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeRange, filter]);
+
+  useEffect(() => {
+    fetchDeviceIds();
+    fetchAllReadings();
+  }, [fetchDeviceIds, fetchAllReadings]);
+
+  useEffect(() => {
+    fetchTrends();
+  }, [fetchTrends]);
+
+  // Auto-refresh effect
+  useEffect(() => {
+    if (!autoRefresh) return;
+
+    const interval = setInterval(() => {
+      fetchTrends();
+      fetchAllReadings();
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [autoRefresh, fetchTrends, fetchAllReadings]);
 
   const formatTimestamp = (timestamp: string): string => {
     const date = new Date(timestamp);
@@ -260,6 +265,28 @@ const Trends: React.FC = () => {
   const getChartOptions = (paramKey: string): ChartOptions<'line'> => {
     const paramConfig = PARAMETERS.find(p => p.key === paramKey);
 
+    // Special handling for pH scale
+    const yAxisConfig = paramKey === 'ph' ? {
+      beginAtZero: true,
+      min: 0,
+      max: 14,
+      ticks: {
+        color: '#666',
+        stepSize: 2,
+      },
+      grid: {
+        color: 'rgba(0, 0, 0, 0.05)',
+      },
+    } : {
+      beginAtZero: false,
+      ticks: {
+        color: '#666',
+      },
+      grid: {
+        color: 'rgba(0, 0, 0, 0.05)',
+      },
+    };
+
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -292,15 +319,7 @@ const Trends: React.FC = () => {
         },
       },
       scales: {
-        y: {
-          beginAtZero: false,
-          ticks: {
-            color: '#666',
-          },
-          grid: {
-            color: 'rgba(0, 0, 0, 0.05)',
-          },
-        },
+        y: yAxisConfig,
         x: {
           ticks: {
             color: '#666',
@@ -317,7 +336,7 @@ const Trends: React.FC = () => {
 
   const getLatestValue = (paramKey: string): string => {
     if (!trendsData || !trendsData.latestValues[paramKey]) {
-      return 'N/A';
+      return 'No data';
     }
     const paramConfig = PARAMETERS.find(p => p.key === paramKey);
     const value = trendsData.latestValues[paramKey].toFixed(2);
@@ -327,7 +346,7 @@ const Trends: React.FC = () => {
   // Pie chart for quality status distribution
   const getQualityStatusDistribution = () => {
     const statusCount: { [key: string]: number } = {};
-    
+
     allReadings.forEach(reading => {
       const status = reading.qualityStatus || 'Unknown';
       statusCount[status] = (statusCount[status] || 0) + 1;
@@ -341,15 +360,7 @@ const Trends: React.FC = () => {
     const labels = Object.keys(distribution);
     const data = Object.values(distribution);
 
-    const colors = labels.map(label => {
-      const upper = label.toUpperCase();
-      if (upper.includes('EXCELLENT')) return '#4CAF50';
-      if (upper.includes('GOOD')) return '#8BC34A';
-      if (upper.includes('MEDIUM') || upper.includes('MODERATE')) return '#FFC107';
-      if (upper.includes('POOR') && !upper.includes('VERY')) return '#FF9800';
-      if (upper.includes('VERY POOR') || upper.includes('CRITICAL')) return '#F44336';
-      return '#9E9E9E';
-    });
+    const colors = labels.map(label => getStatusColor(label));
 
     return {
       labels,
@@ -622,7 +633,7 @@ const Trends: React.FC = () => {
         <div style={{ textAlign: 'center', padding: '50px', fontSize: '18px', color: '#666' }}>
           Loading trends data...
         </div>
-      ) : trendsData ? (
+      ) : trendsData && trendsData.trends[selectedParameter] && trendsData.trends[selectedParameter].length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
           {/* Selected Parameter Chart (Large) */}
           <div>
@@ -634,22 +645,14 @@ const Trends: React.FC = () => {
               boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
               height: '400px',
             }}>
-              <Line
-                options={getChartOptions(selectedParameter)}
-                data={getChartData(selectedParameter)}
-              />
+              <Line options={getChartOptions(selectedParameter)} data={getChartData(selectedParameter)} />
             </div>
           </div>
 
           {/* Pie Charts Section */}
           <div>
             <h2 className="chart-section-header">📊 Distribution Analysis</h2>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-              gap: '20px',
-              marginBottom: '30px',
-            }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               {/* Quality Status Distribution Pie Chart */}
               {allReadings.length > 0 && (
                 <div
@@ -702,31 +705,48 @@ const Trends: React.FC = () => {
               gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
               gap: '20px',
             }}>
-            {PARAMETERS.filter(p => p.key !== selectedParameter).map(param => (
-              <div
-                key={param.key}
-                style={{
-                  backgroundColor: 'white',
-                  padding: '15px',
-                  borderRadius: '8px',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                  height: '300px',
-                  cursor: 'pointer',
-                }}
-                onClick={() => setSelectedParameter(param.key)}
-              >
-                <Line
-                  options={getChartOptions(param.key)}
-                  data={getChartData(param.key)}
-                />
-              </div>
-            ))}
+              {PARAMETERS.filter(p => p.key !== selectedParameter).map(param => (
+                <div
+                  key={param.key}
+                  style={{
+                    backgroundColor: 'white',
+                    padding: '15px',
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                    height: '300px',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setSelectedParameter(param.key)}
+                >
+                  <Line
+                    options={getChartOptions(param.key)}
+                    data={getChartData(param.key)}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '50px', fontSize: '18px', color: '#666' }}>
-          No data available. Please ensure sensors are sending data.
+        <div style={{
+          textAlign: 'center',
+          padding: '60px 40px',
+          background: '#f8fafc',
+          borderRadius: '12px',
+          border: '2px dashed #cbd5e1'
+        }}>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>📊</div>
+          <h3 style={{ margin: '0 0 10px 0', color: '#1e293b', fontSize: '20px' }}>
+            No Historical Data Available
+          </h3>
+          <p style={{ margin: '0', color: '#64748b', fontSize: '16px', maxWidth: '500px', marginLeft: 'auto', marginRight: 'auto' }}>
+            {filter.state || filter.district || filter.city || filter.village
+              ? `No historical data available for the selected region (${getBreadcrumb().join(' › ')}) and time range.`
+              : 'No historical data available for the selected time range. Please select a location filter or ensure sensors are sending data.'}
+          </p>
+          <p style={{ margin: '15px 0 0 0', color: '#94a3b8', fontSize: '14px' }}>
+            Try selecting a different time range or location filter.
+          </p>
         </div>
       )}
     </div>

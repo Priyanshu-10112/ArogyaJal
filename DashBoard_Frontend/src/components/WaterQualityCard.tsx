@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { getWaterQuality, getStatusConfig, getBatteryConfig, WaterQualityResponse } from '../services/waterQuality.service';
+import { getWaterQuality, getBatteryConfig, WaterQualityResponse } from '../services/waterQuality.service';
+import { getStatusConfig } from '../utils/statusConfig';
 import './WaterQualityCard.css';
 // Updated to include latestReadings from backend
 
@@ -116,7 +117,7 @@ const WaterQualityCard: React.FC<WaterQualityCardProps> = ({ deviceId }) => {
             <h4>Battery Status</h4>
           </div>
           <div className="parameter-content">
-            <div 
+            <div
               className="parameter-status-badge"
               style={{ backgroundColor: batteryConfig.color }}
             >
@@ -154,7 +155,7 @@ const ParameterCard: React.FC<ParameterCardProps> = ({ title, icon, status, opti
         <h4>{title}</h4>
       </div>
       <div className="parameter-content">
-        <div 
+        <div
           className="parameter-status-badge"
           style={{ backgroundColor: statusConfig.color }}
         >

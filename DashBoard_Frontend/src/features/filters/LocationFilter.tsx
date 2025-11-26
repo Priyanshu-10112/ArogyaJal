@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useGlobalFilter } from '../contexts/GlobalFilterContext';
-import { getStates, getDistricts, getCities, getVillages, getDevicesByLocation, DeviceInfo } from '../services/waterQuality.service';
+import { useGlobalFilter } from '../../contexts/GlobalFilterContext';
+import { getStates, getDistricts, getCities, getVillages, getDevicesByLocation, DeviceInfo } from '../../services/waterQuality.service';
 import './LocationFilter.css';
 
 interface LocationFilterProps {
@@ -10,7 +10,7 @@ interface LocationFilterProps {
 
 const LocationFilter: React.FC<LocationFilterProps> = ({ onDevicesChange, onBreadcrumbChange }) => {
   const { filter, updateFilter, resetFilter, isFieldLocked } = useGlobalFilter();
-  
+
   const [states, setStates] = useState<string[]>([]);
   const [districts, setDistricts] = useState<string[]>([]);
   const [cities, setCities] = useState<string[]>([]);
@@ -100,7 +100,7 @@ const LocationFilter: React.FC<LocationFilterProps> = ({ onDevicesChange, onBrea
       try {
         const data = await getCities(selectedState, district);
         setCities(data);
-        
+
         // If no cities found, load villages directly
         if (data.length === 0) {
           console.log('No cities found, loading villages directly for district:', district);

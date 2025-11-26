@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useGlobalFilter } from '../contexts/GlobalFilterContext';
-import { getAllowedDeviceIds } from '../utils/locationMapper';
-import OutbreakPredictionPanel from '../components/ML/OutbreakPredictionPanel';
-import ClusterMap from '../components/ML/ClusterMap';
-import DeviceHealthCard from '../components/ML/DeviceHealthCard';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useGlobalFilter } from '../../contexts/GlobalFilterContext';
+import { getAllowedDeviceIds } from '../../utils/locationMapper';
+import OutbreakPredictionPanel from '../../components/ML/OutbreakPredictionPanel';
+import ClusterMap from '../../components/ML/ClusterMap';
+import DeviceHealthCard from '../../components/ML/DeviceHealthCard';
 import './MLDashboard.css';
 
 interface SensorReading {
@@ -28,7 +28,7 @@ interface DashboardStats {
 }
 
 const MLDashboard: React.FC = () => {
-  const { filter, getBreadcrumb } = useGlobalFilter();
+  const { filter } = useGlobalFilter();
   const [sensors, setSensors] = useState<SensorReading[]>([]);
   const [mlServiceOnline, setMlServiceOnline] = useState<boolean>(false);
   const [stats, setStats] = useState<DashboardStats>({
@@ -40,20 +40,14 @@ const MLDashboard: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, [filter]);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       // Check ML Service status
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
       const ML_API_BASE = process.env.REACT_APP_ML_API_URL || 'http://localhost:5000';
-      
+
       try {
-        const mlResponse = await fetch(`${ML_API_BASE}/health`, { 
+        const mlResponse = await fetch(`${ML_API_BASE}/health`, {
           method: 'GET',
           signal: AbortSignal.timeout(2000) // 2 second timeout
         });
@@ -69,16 +63,16 @@ const MLDashboard: React.FC = () => {
         city: filter.city,
         village: filter.village
       });
-      
+
       let filteredSensors: SensorReading[] = [];
-      
+
       // Fetch sensors
       try {
         const sensorsResponse = await fetch(`${API_BASE}/api/sensors/readings`);
         if (sensorsResponse.ok) {
           const sensorsData = await sensorsResponse.json();
           const sensorArray = Array.isArray(sensorsData) ? sensorsData : [];
-          
+
           // Filter sensors based on allowed device IDs
           filteredSensors = sensorArray.filter((sensor: SensorReading) => {
             // If no filter, show all
@@ -95,7 +89,7 @@ const MLDashboard: React.FC = () => {
             }
             return true;
           });
-          
+
           setSensors(filteredSensors);
         }
       } catch (err) {
@@ -106,14 +100,14 @@ const MLDashboard: React.FC = () => {
       try {
         // Get unique sensor IDs from filtered sensors
         const uniqueSensorIds = new Set(filteredSensors.map(s => s.sensorId));
-        
+
         // Fetch all data for stats calculation
         const [alertsResponse, reportsResponse, clustersResponse] = await Promise.all([
           fetch(`${API_BASE}/api/alerts`),
           fetch(`${API_BASE}/api/symptom-reports`),
           fetch(`${API_BASE}/api/clusters/active`)
         ]);
-        
+
         let filteredStats = {
           totalSensors: uniqueSensorIds.size,
           activeSensors: uniqueSensorIds.size,
@@ -121,7 +115,7 @@ const MLDashboard: React.FC = () => {
           activeClusters: 0,
           activeAlerts: 0
         };
-        
+
         // Filter alerts by allowed devices
         if (alertsResponse.ok) {
           const alerts = await alertsResponse.json();
@@ -133,21 +127,21 @@ const MLDashboard: React.FC = () => {
           });
           filteredStats.activeAlerts = filteredAlerts.filter((a: any) => a.status === 'ACTIVE').length;
         }
-        
+
         // Filter symptom reports by location (if needed)
         if (reportsResponse.ok) {
           const reports = await reportsResponse.json();
           // For now, show all reports (can be filtered by location if needed)
           filteredStats.totalReports = reports.length;
         }
-        
+
         // Filter clusters by location (if needed)
         if (clustersResponse.ok) {
           const clusters = await clustersResponse.json();
           // For now, show all clusters (can be filtered by location if needed)
           filteredStats.activeClusters = clusters.length;
         }
-        
+
         setStats(filteredStats);
       } catch (err) {
         console.log('Error calculating stats:', err);
@@ -166,7 +160,13 @@ const MLDashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    fetchDashboardData();
+    const interval = setInterval(fetchDashboardData, 30000); // Refresh every 30 seconds
+    return () => clearInterval(interval);
+  }, [fetchDashboardData]);
 
   if (loading) {
     return (
@@ -242,20 +242,32 @@ const MLDashboard: React.FC = () => {
             <h2>Device Health Status</h2>
             <div className="devices-grid">
               {sensors.length > 0 ? (
-                sensors.slice(0, 4).map((sensor) => (
-                  <DeviceHealthCard
-                    key={sensor.id}
-                    sensorId={sensor.sensorId}
-                    location={sensor.location}
-                    batteryLevel={sensor.batteryLevel}
-                    batteryVoltage={sensor.batteryVoltage}
-                    signalStrength={sensor.signalStrength}
-                    uptime={sensor.uptime}
-                    wqi={sensor.wqi}
-                    qualityStatus={sensor.qualityStatus}
-                    lastUpdated={sensor.timestamp}
-                  />
-                ))
+                (() => {
+                  // Get unique sensors (latest reading per device)
+                  const uniqueSensors = new Map<string, SensorReading>();
+                  sensors.forEach((sensor) => {
+                    const existing = uniqueSensors.get(sensor.sensorId);
+                    if (!existing || new Date(sensor.timestamp || 0) > new Date(existing.timestamp || 0)) {
+                      uniqueSensors.set(sensor.sensorId, sensor);
+                    }
+                  });
+                  
+                  // Convert to array and take first 4
+                  return Array.from(uniqueSensors.values()).slice(0, 4).map((sensor) => (
+                    <DeviceHealthCard
+                      key={sensor.id}
+                      sensorId={sensor.sensorId}
+                      location={sensor.location}
+                      batteryLevel={sensor.batteryLevel}
+                      batteryVoltage={sensor.batteryVoltage}
+                      signalStrength={sensor.signalStrength}
+                      uptime={sensor.uptime}
+                      wqi={sensor.wqi}
+                      qualityStatus={sensor.qualityStatus}
+                      lastUpdated={sensor.timestamp}
+                    />
+                  ));
+                })()
               ) : (
                 <div className="no-data">No sensor data available</div>
               )}

@@ -3,7 +3,7 @@
  * Connects to new government-standard water quality assessment API
  */
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+import apiClient from './api.service';
 
 export interface WaterQualityResponse {
   finalStatus: 'GOOD' | 'MODERATE' | 'HIGH' | 'CRITICAL' | 'UNKNOWN';
@@ -51,14 +51,8 @@ export interface DeviceInfo {
  */
 export const getWaterQuality = async (deviceId: string): Promise<WaterQualityResponse> => {
   try {
-    const response = await fetch(`${API_BASE}/api/sensor-data/water-quality/${deviceId}`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data;
+    const response = await apiClient.get(`/sensor-data/water-quality/${deviceId}`);
+    return response.data;
   } catch (error) {
     console.error('Error fetching water quality:', error);
     throw error;
@@ -70,13 +64,8 @@ export const getWaterQuality = async (deviceId: string): Promise<WaterQualityRes
  */
 export const getStates = async (): Promise<string[]> => {
   try {
-    const response = await fetch(`${API_BASE}/api/locations/states`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await apiClient.get('/locations/states');
+    return response.data;
   } catch (error) {
     console.error('Error fetching states:', error);
     return [];
@@ -88,13 +77,10 @@ export const getStates = async (): Promise<string[]> => {
  */
 export const getDistricts = async (state: string): Promise<string[]> => {
   try {
-    const response = await fetch(`${API_BASE}/api/locations/districts?state=${encodeURIComponent(state)}`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await apiClient.get('/locations/districts', {
+      params: { state }
+    });
+    return response.data;
   } catch (error) {
     console.error('Error fetching districts:', error);
     return [];
@@ -106,15 +92,10 @@ export const getDistricts = async (state: string): Promise<string[]> => {
  */
 export const getCities = async (state: string, district: string): Promise<string[]> => {
   try {
-    const response = await fetch(
-      `${API_BASE}/api/locations/cities?state=${encodeURIComponent(state)}&district=${encodeURIComponent(district)}`
-    );
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    const response = await apiClient.get('/locations/cities', {
+      params: { state, district }
+    });
+    return response.data;
   } catch (error) {
     console.error('Error fetching cities:', error);
     return [];
@@ -126,20 +107,11 @@ export const getCities = async (state: string, district: string): Promise<string
  */
 export const getVillages = async (state: string, district: string, city?: string): Promise<string[]> => {
   try {
-    const params = new URLSearchParams();
-    params.append('state', state);
-    params.append('district', district);
-    if (city) {
-      params.append('city', city);
-    }
-    
-    const response = await fetch(`${API_BASE}/api/locations/villages?${params.toString()}`);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    const params: any = { state, district };
+    if (city) params.city = city;
+
+    const response = await apiClient.get('/locations/villages', { params });
+    return response.data;
   } catch (error) {
     console.error('Error fetching villages:', error);
     return [];
@@ -156,64 +128,18 @@ export const getDevicesByLocation = async (
   village?: string
 ): Promise<DeviceInfo[]> => {
   try {
-    const params = new URLSearchParams();
-    if (state) params.append('state', state);
-    if (district) params.append('district', district);
-    if (city) params.append('city', city);
-    if (village) params.append('village', village);
-    
-    const url = `${API_BASE}/api/locations/devices${params.toString() ? '?' + params.toString() : ''}`;
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    return await response.json();
+    const params: any = {};
+    if (state) params.state = state;
+    if (district) params.district = district;
+    if (city) params.city = city;
+    if (village) params.village = village;
+
+    const response = await apiClient.get('/locations/devices', { params });
+    return response.data;
   } catch (error) {
     console.error('Error fetching devices:', error);
     return [];
   }
-};
-
-/**
- * Get status configuration for UI display
- */
-export const getStatusConfig = (status: string) => {
-  const configs: Record<string, { label: string; color: string; badge: string }> = {
-    GOOD: {
-      label: 'Safe',
-      color: '#10b981', // green
-      badge: 'success'
-    },
-    MODERATE: {
-      label: 'Needs Monitoring',
-      color: '#f59e0b', // yellow
-      badge: 'warning'
-    },
-    HIGH: {
-      label: 'Unsafe',
-      color: '#f97316', // orange
-      badge: 'danger'
-    },
-    CRITICAL: {
-      label: 'Dangerous – Do Not Drink',
-      color: '#ef4444', // red
-      badge: 'critical'
-    },
-    UNKNOWN: {
-      label: 'Data Not Available',
-      color: '#6b7280', // gray
-      badge: 'secondary'
-    },
-    NOT_REPORTING: {
-      label: 'Not reporting',
-      color: '#9ca3af', // light gray
-      badge: 'secondary'
-    }
-  };
-  
-  return configs[status] || configs.UNKNOWN;
 };
 
 /**
@@ -238,6 +164,6 @@ export const getBatteryConfig = (status: string) => {
       color: '#6b7280' // gray
     }
   };
-  
+
   return configs[status] || configs.NOT_REPORTING;
 };

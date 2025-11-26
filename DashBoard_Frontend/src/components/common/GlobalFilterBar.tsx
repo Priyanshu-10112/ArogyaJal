@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useGlobalFilter } from '../contexts/GlobalFilterContext';
+import { useGlobalFilter } from '../../contexts/GlobalFilterContext';
 import './GlobalFilterBar.css';
 
 interface GlobalFilterBarProps {

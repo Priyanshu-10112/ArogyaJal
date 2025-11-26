@@ -3,12 +3,13 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGauge, faChartLine, faBell, faMap, faBrain } from '@fortawesome/free-solid-svg-icons';
 import { GlobalFilterProvider } from './contexts/GlobalFilterContext';
-import GlobalFilterBar from './components/GlobalFilterBar';
-import AlertsPage from './pages/AlertsPage';
-import DashboardUpdated from './pages/DashboardUpdated';
-import Trends from './pages/Trends';
-import MapPage from './pages/Map';
-import MLDashboard from './pages/MLDashboard';
+import { ToastProvider } from './contexts/ToastContext';
+import Layout from './components/common/Layout';
+import AlertsPage from './features/alerts/AlertsPage';
+import Dashboard from './features/dashboard/Dashboard';
+import Trends from './features/trends/Trends';
+import MapPage from './features/map/MapPage';
+import MLDashboard from './features/ml/MLDashboard';
 import './App.css';
 import './layout-fix.css';
 
@@ -54,28 +55,29 @@ const AppContent: React.FC = () => {
       </aside>
 
       {/* Main Content */}
-      <main className="main-content">
-        {/* Global Filter Bar */}
-        <GlobalFilterBar />
-
-        {/* Page Routes */}
-        <Routes>
-          <Route path="/" element={<DashboardUpdated />} />
-          <Route path="/alerts" element={<AlertsPage />} />
-          <Route path="/trends" element={<Trends />} />
-          <Route path="/map" element={<MapPage />} />
-          <Route path="/ml-dashboard" element={<MLDashboard />} />
-        </Routes>
-      </main>
+      <div className="main-content">
+        <Layout>
+          {/* Page Routes */}
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/trends" element={<Trends />} />
+            <Route path="/map" element={<MapPage />} />
+            <Route path="/ml-dashboard" element={<MLDashboard />} />
+          </Routes>
+        </Layout>
+      </div>
     </div>
   );
 };
 
 const App: React.FC = () => {
   return (
-    <GlobalFilterProvider>
-      <AppContent />
-    </GlobalFilterProvider>
+    <ToastProvider>
+      <GlobalFilterProvider>
+        <AppContent />
+      </GlobalFilterProvider>
+    </ToastProvider>
   );
 };
 

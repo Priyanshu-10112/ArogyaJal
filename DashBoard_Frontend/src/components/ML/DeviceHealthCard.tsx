@@ -1,5 +1,13 @@
 import React from 'react';
 import './DeviceHealthCard.css';
+import {
+  getWaterQualityClassification,
+  getBatteryStatus,
+  getSignalStatus,
+  formatUptime,
+  formatLocation,
+  isTestDevice
+} from '../../utils/waterQuality';
 
 interface DeviceHealthProps {
   sensorId: string;
@@ -24,68 +32,32 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
   qualityStatus,
   lastUpdated
 }) => {
-  const getBatteryIcon = (level?: number) => {
-    if (!level) return '🔋';
-    if (level >= 80) return '🔋';
-    if (level >= 50) return '🔋';
-    if (level >= 20) return '🪫';
+  // Use centralized utility functions
+  const wqiClassification = getWaterQualityClassification(wqi);
+  const batteryInfo = getBatteryStatus(batteryLevel, batteryVoltage);
+  const signalInfo = getSignalStatus(signalStrength);
+  const uptimeDisplay = formatUptime(uptime, lastUpdated);
+  const locationDisplay = formatLocation(location);
+  const isTest = isTestDevice(sensorId);
+
+  const getBatteryIcon = (percentage: number | null) => {
+    if (percentage === null) return '🔋';
+    if (percentage >= 70) return '🔋';
+    if (percentage >= 30) return '🔋';
     return '🪫';
   };
 
-  const getBatteryColor = (level?: number) => {
-    if (!level) return '#6b7280';
-    if (level >= 70) return '#10b981';
-    if (level >= 30) return '#f59e0b';
-    return '#dc2626';
-  };
-
-  const getSignalIcon = (strength?: number) => {
-    if (!strength) return '📶';
-    if (strength >= -60) return '📶';
-    if (strength >= -70) return '📶';
-    if (strength >= -80) return '📶';
-    return '📶';
-  };
-
-  const getSignalQuality = (strength?: number) => {
-    if (!strength) return 'Unknown';
-    if (strength >= -60) return 'Excellent';
-    if (strength >= -70) return 'Good';
-    if (strength >= -80) return 'Fair';
-    return 'Weak';
-  };
-
-  const getSignalColor = (strength?: number) => {
-    if (!strength) return '#6b7280';
-    if (strength >= -60) return '#10b981';
-    if (strength >= -70) return '#3b82f6';
-    if (strength >= -80) return '#f59e0b';
-    return '#dc2626';
-  };
-
-  const formatUptime = (seconds?: number) => {
-    if (!seconds) return 'N/A';
-    const days = Math.floor(seconds / 86400);
-    const hours = Math.floor((seconds % 86400) / 3600);
-    if (days > 0) return `${days}d ${hours}h`;
-    return `${hours}h`;
-  };
-
-  const getWQIColor = (wqi?: number) => {
-    if (!wqi) return '#6b7280';
-    if (wqi >= 90) return '#10b981';
-    if (wqi >= 70) return '#3b82f6';
-    if (wqi >= 50) return '#f59e0b';
-    if (wqi >= 25) return '#ea580c';
-    return '#dc2626';
-  };
+  const getSignalIcon = () => '📶';
 
   return (
     <div className="device-health-card">
       <div className="device-header">
         <div>
-          <h3>{sensorId}</h3>
-          <p className="location">{location}</p>
+          <h3>
+            {sensorId}
+            {isTest && <span style={{ fontSize: '10px', color: '#6b7280', marginLeft: '8px' }}>(Test Device)</span>}
+          </h3>
+          <p className="location">{locationDisplay}</p>
         </div>
         {lastUpdated && (
           <span className="last-updated">
@@ -97,12 +69,12 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
       {/* Water Quality */}
       {wqi !== undefined && wqi !== null && (
         <div className="wqi-section">
-          <div className="wqi-circle" style={{ borderColor: getWQIColor(wqi) }}>
+          <div className="wqi-circle" style={{ borderColor: wqiClassification.color }}>
             <div className="wqi-value">{wqi.toFixed(1)}</div>
             <div className="wqi-label">WQI</div>
           </div>
-          <div className="wqi-status" style={{ color: getWQIColor(wqi) }}>
-            {qualityStatus || 'Unknown'}
+          <div className="wqi-status" style={{ color: wqiClassification.color }}>
+            {wqiClassification.label}
           </div>
         </div>
       )}
@@ -110,66 +82,62 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
       {/* Device Status */}
       <div className="device-status">
         {/* Battery */}
-        {batteryLevel !== undefined && (
-          <div className="status-item">
-            <div className="status-icon">{getBatteryIcon(batteryLevel)}</div>
-            <div className="status-info">
-              <div className="status-label">Battery</div>
-              <div className="status-value" style={{ color: getBatteryColor(batteryLevel) }}>
-                {batteryLevel}%
-                {batteryVoltage !== undefined && batteryVoltage !== null && <span className="sub-value"> ({batteryVoltage.toFixed(2)}V)</span>}
-              </div>
+        <div className="status-item">
+          <div className="status-icon">{getBatteryIcon(batteryInfo.percentage)}</div>
+          <div className="status-info">
+            <div className="status-label">Battery</div>
+            <div className="status-value" style={{ color: batteryInfo.color }}>
+              {batteryInfo.percentage !== null ? `${batteryInfo.percentage.toFixed(0)}%` : batteryInfo.label}
+              {batteryVoltage !== undefined && batteryVoltage !== null && <span className="sub-value"> ({batteryVoltage.toFixed(2)}V)</span>}
             </div>
+          </div>
+          {batteryInfo.percentage !== null && (
             <div className="status-bar">
               <div 
                 className="status-fill" 
                 style={{ 
-                  width: `${batteryLevel}%`,
-                  background: getBatteryColor(batteryLevel)
+                  width: `${batteryInfo.percentage}%`,
+                  background: batteryInfo.color
                 }}
               ></div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Signal */}
-        {signalStrength !== undefined && (
-          <div className="status-item">
-            <div className="status-icon">{getSignalIcon(signalStrength)}</div>
-            <div className="status-info">
-              <div className="status-label">Signal</div>
-              <div className="status-value" style={{ color: getSignalColor(signalStrength) }}>
-                {getSignalQuality(signalStrength)}
-                <span className="sub-value"> ({signalStrength} dBm)</span>
-              </div>
+        <div className="status-item">
+          <div className="status-icon">{getSignalIcon()}</div>
+          <div className="status-info">
+            <div className="status-label">Signal</div>
+            <div className="status-value" style={{ color: signalInfo.color }}>
+              {signalInfo.label}
+              {signalInfo.strength !== null && <span className="sub-value"> ({signalInfo.strength} dBm)</span>}
             </div>
           </div>
-        )}
+        </div>
 
         {/* Uptime */}
-        {uptime !== undefined && (
-          <div className="status-item">
-            <div className="status-icon">⏱️</div>
-            <div className="status-info">
-              <div className="status-label">Uptime</div>
-              <div className="status-value">{formatUptime(uptime)}</div>
-            </div>
+        <div className="status-item">
+          <div className="status-icon">⏱️</div>
+          <div className="status-info">
+            <div className="status-label">Uptime</div>
+            <div className="status-value">{uptimeDisplay}</div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Alerts */}
-      {(batteryLevel !== undefined && batteryLevel < 30) && (
+      {batteryInfo.warning && (
         <div className="device-alert warning">
-          ⚠️ Low battery - replacement recommended
+          ⚠️ {batteryInfo.warning}
         </div>
       )}
-      {(signalStrength !== undefined && signalStrength < -80) && (
+      {signalInfo.strength !== null && signalInfo.strength < -80 && (
         <div className="device-alert warning">
           ⚠️ Weak signal - check connectivity
         </div>
       )}
-      {(wqi !== undefined && wqi !== null && wqi < 50) && (
+      {wqi !== undefined && wqi !== null && wqi > 75 && (
         <div className="device-alert critical">
           🚨 Poor water quality detected
         </div>

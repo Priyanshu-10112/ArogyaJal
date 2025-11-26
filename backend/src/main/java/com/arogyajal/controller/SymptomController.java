@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/symptoms")
 @Tag(name = "Symptom Controller", description = "APIs for managing symptom reports")
 public class SymptomController {
     
@@ -41,7 +40,7 @@ public class SymptomController {
         this.alertService = alertService;
     }
     
-    @GetMapping
+    @GetMapping("/api/symptoms")
     @Operation(summary = "Get symptom reporting API info", description = "Returns API information and usage instructions")
     public ResponseEntity<?> getSymptomApiInfo() {
         log.info("GET request received for /api/symptoms - returning API info");
@@ -74,7 +73,7 @@ public class SymptomController {
         return ResponseEntity.ok(response);
     }
     
-    @PostMapping
+    @PostMapping("/api/symptoms")
     @Operation(summary = "Create a new symptom report (mobile app endpoint)", description = "Submit a new symptom report - mobile app compatible")
     public ResponseEntity<SymptomReport> createSymptomReportMobile(@Valid @RequestBody SymptomRequest request) {
         log.info("Creating symptom report for user: {} (mobile endpoint)", request.getUserId());
@@ -92,7 +91,7 @@ public class SymptomController {
         }
     }
     
-    @PostMapping("/reports")
+    @PostMapping("/api/symptoms/reports")
     @Operation(summary = "Create a new symptom report", description = "Submit a new symptom report")
     public ResponseEntity<SymptomReport> createSymptomReport(@Valid @RequestBody SymptomRequest request) {
         log.info("Creating symptom report for user: {}", request.getUserId());
@@ -110,7 +109,7 @@ public class SymptomController {
         }
     }
     
-    @GetMapping("/reports")
+    @GetMapping("/api/symptoms/reports")
     @Operation(summary = "Get all symptom reports", description = "Retrieve all symptom reports")
     public ResponseEntity<List<SymptomReport>> getAllSymptomReports() {
         log.info("Retrieving all symptom reports");
@@ -118,7 +117,15 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @GetMapping("/reports/{id}")
+    // Alias endpoint for frontend compatibility (without 's' in symptoms)
+    @GetMapping("/api/symptom-reports")
+    @Operation(summary = "Get all symptom reports (alias)", description = "Retrieve all symptom reports - alias endpoint for frontend")
+    public ResponseEntity<List<SymptomReport>> getAllSymptomReportsAlias() {
+        log.info("Retrieving all symptom reports (via alias endpoint /api/symptom-reports)");
+        return getAllSymptomReports();
+    }
+    
+    @GetMapping("/api/symptoms/reports/{id}")
     @Operation(summary = "Get symptom report by ID", description = "Retrieve a specific symptom report by its ID")
     public ResponseEntity<SymptomReport> getSymptomReportById(
             @Parameter(description = "Symptom report ID") @PathVariable String id) {
@@ -129,7 +136,7 @@ public class SymptomController {
                 .orElse(ResponseEntity.notFound().build());
     }
     
-    @GetMapping("/reports/user/{userId}")
+    @GetMapping("/api/symptoms/reports/user/{userId}")
     @Operation(summary = "Get reports by user ID", description = "Retrieve all reports for a specific user")
     public ResponseEntity<List<SymptomReport>> getReportsByUserId(
             @Parameter(description = "User ID") @PathVariable String userId) {
@@ -139,7 +146,7 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @GetMapping("/reports/location/{location}")
+    @GetMapping("/api/symptoms/reports/location/{location}")
     @Operation(summary = "Get reports by location", description = "Retrieve all reports for a specific location")
     public ResponseEntity<List<SymptomReport>> getReportsByLocation(
             @Parameter(description = "Location name") @PathVariable String location) {
@@ -149,7 +156,7 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @GetMapping("/reports/status/{status}")
+    @GetMapping("/api/symptoms/reports/status/{status}")
     @Operation(summary = "Get reports by status", description = "Retrieve reports filtered by status")
     public ResponseEntity<List<SymptomReport>> getReportsByStatus(
             @Parameter(description = "Report status (PENDING, INVESTIGATED, RESOLVED)") @PathVariable String status) {
@@ -159,7 +166,7 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @GetMapping("/reports/severity/{severity}")
+    @GetMapping("/api/symptoms/reports/severity/{severity}")
     @Operation(summary = "Get reports by severity", description = "Retrieve reports filtered by severity")
     public ResponseEntity<List<SymptomReport>> getReportsBySeverity(
             @Parameter(description = "Severity level (MILD, MODERATE, SEVERE)") @PathVariable String severity) {
@@ -169,7 +176,7 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @GetMapping("/reports/time-range")
+    @GetMapping("/api/symptoms/reports/time-range")
     @Operation(summary = "Get reports by time range", description = "Retrieve reports within a specific time range")
     public ResponseEntity<List<SymptomReport>> getReportsByTimeRange(
             @Parameter(description = "Start time (seconds since epoch)") @RequestParam long startSeconds,
@@ -182,7 +189,7 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @GetMapping("/reports/location/{location}/time-range")
+    @GetMapping("/api/symptoms/reports/location/{location}/time-range")
     @Operation(summary = "Get reports by location and time range", description = "Retrieve reports for a location within a specific time range")
     public ResponseEntity<List<SymptomReport>> getReportsByLocationAndTimeRange(
             @Parameter(description = "Location name") @PathVariable String location,
@@ -196,7 +203,7 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @GetMapping("/reports/symptoms")
+    @GetMapping("/api/symptoms/reports/symptoms")
     @Operation(summary = "Get reports by symptoms", description = "Retrieve reports containing specific symptoms")
     public ResponseEntity<List<SymptomReport>> getReportsBySymptoms(
             @Parameter(description = "List of symptoms") @RequestParam List<String> symptoms) {
@@ -206,7 +213,7 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @GetMapping("/reports/location/{location}/symptoms")
+    @GetMapping("/api/symptoms/reports/location/{location}/symptoms")
     @Operation(summary = "Get reports by location and symptoms", description = "Retrieve reports for a location containing specific symptoms")
     public ResponseEntity<List<SymptomReport>> getReportsByLocationAndSymptoms(
             @Parameter(description = "Location name") @PathVariable String location,
@@ -217,7 +224,7 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @GetMapping("/reports/high-severity/recent")
+    @GetMapping("/api/symptoms/reports/high-severity/recent")
     @Operation(summary = "Get high severity recent reports", description = "Retrieve high severity reports from the last 24 hours")
     public ResponseEntity<List<SymptomReport>> getHighSeverityRecentReports(
             @Parameter(description = "Hours to look back") @RequestParam(defaultValue = "24") int hours) {
@@ -229,7 +236,7 @@ public class SymptomController {
         return ResponseEntity.ok(reports);
     }
     
-    @PutMapping("/reports/{id}/status")
+    @PutMapping("/api/symptoms/reports/{id}/status")
     @Operation(summary = "Update report status", description = "Update the status of a symptom report")
     public ResponseEntity<SymptomReport> updateReportStatus(
             @Parameter(description = "Report ID") @PathVariable String id,
@@ -245,7 +252,7 @@ public class SymptomController {
         }
     }
     
-    @GetMapping("/statistics")
+    @GetMapping("/api/symptoms/statistics")
     @Operation(summary = "Get symptom report statistics", description = "Retrieve statistics about symptom reports")
     public ResponseEntity<SymptomStatisticsResponse> getSymptomStatistics() {
         log.info("Retrieving symptom report statistics");

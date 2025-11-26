@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useGlobalFilter } from '../contexts/GlobalFilterContext';
-import { coordsToLocation, getAllowedDeviceIds } from '../utils/locationMapper';
-import '../App.css';
+import { useGlobalFilter } from '../../contexts/GlobalFilterContext';
+import { useToast } from '../../contexts/ToastContext';
+import { coordsToLocation, getAllowedDeviceIds } from '../../utils/locationMapper';
+import { getStatusColor } from '../../utils/statusConfig';
+import '../../App.css';
 import {
   getAllAlerts,
   acknowledgeAlert,
   resolveAlert,
   getAlertStatistics,
   type Alert,
-} from '../services/api.service';
+} from '../../services/api.service';
 
 interface AlertStats {
   total: number;
@@ -23,6 +25,7 @@ interface AlertStats {
 
 const AlertsPage: React.FC = () => {
   const { filter, getBreadcrumb } = useGlobalFilter();
+  const { addToast } = useToast();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [filteredAlerts, setFilteredAlerts] = useState<Alert[]>([]);
   const [stats, setStats] = useState<AlertStats | null>(null);
@@ -59,7 +62,7 @@ const AlertsPage: React.FC = () => {
   const fetchAlerts = async () => {
     try {
       setLoading(true);
-      
+
       // Get allowed device IDs based on global filter
       const allowedDeviceIds = await getAllowedDeviceIds({
         state: filter.state,
@@ -67,9 +70,9 @@ const AlertsPage: React.FC = () => {
         city: filter.city,
         village: filter.village
       });
-      
+
       const data = await getAllAlerts();
-      
+
       // Filter alerts based on allowed device IDs
       const filteredData = data.filter(alert => {
         // If no filter, show all
@@ -86,13 +89,14 @@ const AlertsPage: React.FC = () => {
         }
         return true;
       });
-      
+
       setAlerts(filteredData);
       setLastUpdated(new Date());
       setError(null);
     } catch (err) {
       console.error('Error fetching alerts:', err);
       setError('Failed to load alerts. Please check if the backend is running.');
+      addToast('Failed to load alerts', 'error');
     } finally {
       setLoading(false);
     }
@@ -141,7 +145,7 @@ const AlertsPage: React.FC = () => {
       await fetchStatistics();
     } catch (err) {
       console.error('Error acknowledging alert:', err);
-      alert('Failed to acknowledge alert');
+      addToast('Failed to acknowledge alert', 'error');
     }
   };
 
@@ -152,26 +156,15 @@ const AlertsPage: React.FC = () => {
       await fetchStatistics();
     } catch (err) {
       console.error('Error resolving alert:', err);
-      alert('Failed to resolve alert');
+      addToast('Failed to resolve alert', 'error');
     }
   };
 
   const getSeverityColor = (severity: string): string => {
-    switch (severity?.toUpperCase()) {
-      case 'CRITICAL':
-        return '#F44336';
-      case 'HIGH':
-        return '#FF9800';
-      case 'MEDIUM':
-        return '#FFC107';
-      case 'LOW':
-        return '#4CAF50';
-      default:
-        return '#9E9E9E';
-    }
+    return getStatusColor(severity);
   };
 
-  const getStatusColor = (status: string): string => {
+  const getAlertStatusColor = (status: string): string => {
     switch (status?.toUpperCase()) {
       case 'ACTIVE':
         return '#F44336';
@@ -186,20 +179,20 @@ const AlertsPage: React.FC = () => {
 
   const formatDate = (dateString: string | any): string => {
     if (!dateString) return 'N/A';
-    
+
     try {
       // Handle Firestore Timestamp object (from backend)
       if (dateString.seconds !== undefined) {
         const date = new Date(dateString.seconds * 1000);
         return date.toLocaleString();
       }
-      
+
       // Handle Firestore Timestamp object (alternative format)
       if (dateString._seconds !== undefined) {
         const date = new Date(dateString._seconds * 1000);
         return date.toLocaleString();
       }
-      
+
       // Handle regular date string
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'N/A';
@@ -473,7 +466,7 @@ const AlertsPage: React.FC = () => {
                           borderRadius: '12px',
                           fontSize: '12px',
                           fontWeight: 'bold',
-                          backgroundColor: getStatusColor(alert.status),
+                          backgroundColor: getAlertStatusColor(alert.status),
                           color: 'white',
                         }}
                       >
@@ -559,7 +552,7 @@ const AlertsPage: React.FC = () => {
                       </button>
                     )}
                     {alert.status === 'RESOLVED' && (
-                      <span style={{ 
+                      <span style={{
                         padding: '8px 16px',
                         color: '#4CAF50',
                         fontSize: '14px',

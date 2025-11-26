@@ -9,15 +9,21 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 ## ✨ Key Features
 
 ### 1. Real-Time Water Quality Monitoring
-- **IoT Sensor Integration**: pH, Temperature, Turbidity, TDS, Conductivity
+- **IoT Sensor Integration**: pH, Temperature, Turbidity, TDS (4 core sensors)
 - **Live Dashboard**: Real-time sensor readings with auto-refresh
 - **Water Quality Index (WQI)**: Automated quality assessment
 - **Multi-level Alerts**: CRITICAL, HIGH, MEDIUM, LOW severity levels
 
-### 2. Disease Outbreak Prediction
+### 2. Outbreak Risk Prediction
 - **ML-Powered Risk Assessment**: Real-time outbreak risk scoring (0-100)
-- **Confidence Metrics**: 79% prediction confidence
-- **Contributing Factors Analysis**: Clusters, Reports, Water Quality, Sources
+- **DBSCAN Clustering**: Groups symptom reports by geographic proximity (5km radius)
+- **Risk Calculation Formula**:
+  - Cluster Factor (0-50 points): Number and density of symptom clusters
+  - Report Factor (0-20 points): Total symptom reports in region
+  - Quality Factor (0-20 points): Poor water quality sensor readings
+  - Water Source Factor (0-10 points): Contaminated water sources
+- **Confidence Metrics**: Prediction confidence based on data completeness
+- **Geographic Correlation**: Links symptom patterns to water quality issues
 - **Auto-refresh**: Updates every 60 seconds
 
 ### 3. Hierarchical Location Filtering
@@ -26,11 +32,14 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 - **Global Filter Sync**: All pages synchronized with filter selection
 - **Breadcrumb Navigation**: Clear filter path display
 
-### 4. Symptom Cluster Detection
-- **DBSCAN Clustering**: Automatic outbreak pattern detection
-- **Interactive Map**: Visual cluster representation
+### 4. Symptom Reporting & Clustering
+- **Citizen Symptom Reporting**: Web/mobile interface for health report submission
+- **Report Fields**: Location, symptoms (diarrhea, vomiting, fever, etc.), severity, water source
+- **DBSCAN Clustering**: Automatic outbreak pattern detection (eps=5km, min_samples=3)
+- **Interactive Map**: Visual cluster representation with 5km radius circles
 - **Dominant Symptoms**: Top symptoms per cluster
-- **Risk Scoring**: Cluster-level risk assessment
+- **Geographic Correlation**: Links symptom clusters to nearby water quality issues
+- **Risk Scoring**: Cluster-level risk assessment based on multiple factors
 
 ### 5. Smart Alert System
 - **Multi-Channel Notifications**: Email, SMS, Dashboard
@@ -40,11 +49,52 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 
 ### 6. Comprehensive Analytics
 - **Trends Analysis**: Historical data visualization (1h to 30 days)
-- **Parameter Tracking**: pH, Temperature, Turbidity, TDS, Conductivity
+- **Parameter Tracking**: pH, Temperature, Turbidity, TDS (4 core parameters)
 - **Distribution Charts**: Quality status and parameter range analysis
 - **Auto-Refresh**: 10-second updates (configurable)
 
 ## 🏗️ Architecture
+
+### ML Pipeline & Data Flow
+
+**Complete Workflow: Symptom Report → Outbreak Prediction**
+
+```
+1. Symptom Report Submission
+   ├─ Citizen submits via web/mobile form
+   ├─ Fields: userId, location, symptoms[], severity, waterSource, duration
+   └─ Stored in Firestore (symptom_reports collection)
+
+2. Data Aggregation (Every 60 seconds)
+   ├─ ML Service polls Firestore
+   ├─ Fetches symptom reports (last 7 days)
+   └─ Fetches water quality data (same period)
+
+3. DBSCAN Clustering
+   ├─ Parameters: eps=5km, min_samples=3
+   ├─ Groups reports by geographic proximity
+   └─ Identifies clusters with ≥3 reports within 5km
+
+4. Risk Score Calculation (0-100)
+   ├─ Cluster Factor: (cluster_count × 10) capped at 50
+   ├─ Report Factor: (total_reports / 10) capped at 20
+   ├─ Quality Factor: (poor_quality_sensors / total_sensors × 20)
+   └─ Water Source Factor: (contaminated_sources / total_sources × 10)
+
+5. Confidence Calculation
+   ├─ Based on data completeness and recency
+   └─ Formula: (available_data_points / required_data_points) × 100
+
+6. Prediction Storage & Display
+   ├─ Stored in outbreak_predictions collection
+   ├─ Cached for 60 seconds
+   └─ Displayed on ML Dashboard with auto-refresh
+```
+
+**Geographic Correlation Logic:**
+- Symptom clusters within 5km of poor water quality sensors = HIGH risk
+- Multiple clusters + declining water quality trend = CRITICAL risk
+- Isolated reports far from sensors = LOW risk (monitored)
 
 ### Technology Stack
 
@@ -125,10 +175,15 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 - `GET /api/locations/villages?state={state}&district={district}&city={city}` - Villages
 - `GET /api/locations/devices` - Devices by location hierarchy
 
+**Symptom Reports:**
+- `POST /api/symptoms/reports` - Submit new symptom report
+- `GET /api/symptoms/reports` - Get all symptom reports
+- `GET /api/symptoms/reports/location/{location}` - Reports by location
+
 **ML Predictions:**
-- `GET /api/outbreak-predictions/latest` - Latest outbreak risk
-- `GET /api/symptom-clusters` - Active symptom clusters
-- `GET /api/clusters/active` - Active clusters for map
+- `GET /api/outbreak-predictions/latest` - Latest outbreak risk score
+- `GET /api/symptom-clusters` - Active symptom clusters (DBSCAN results)
+- `GET /api/clusters/active` - Active clusters for map visualization
 
 ## 🚀 Getting Started
 
@@ -198,14 +253,73 @@ REACT_APP_ML_API_URL=http://localhost:5000
 - **Alert Response Time**: < 5 seconds
 - **Dashboard Refresh**: 10-60 seconds (configurable)
 - **Data Retention**: Real-time + historical
+- **WQI Classification**: Standardized 5-level system (Excellent to Very Poor)
+
+## 🎨 Recent Frontend Improvements (Nov 26, 2025)
+
+### ✅ Critical Fixes Implemented
+
+1. **WQI Label Consistency**
+   - Centralized water quality classification system
+   - Consistent labeling across all pages (Dashboard, Map, ML Dashboard, Trends)
+   - Standard ranges: 0-25 (Excellent), 26-50 (Good), 51-75 (Fair), 76-90 (Poor), >90 (Very Poor)
+   - Matching colors and legends everywhere
+
+2. **Trends Page Enhancements**
+   - Fixed pH chart Y-axis scale (0-14 instead of 0-1)
+   - Clear "No Historical Data Available" messaging with context
+   - Proper empty state handling
+   - Changed "N/A" to "No data" for clarity
+
+3. **Device Health Display**
+   - Battery: Shows percentage or "Not reported" (not just "%")
+   - Signal: Shows status or "Not reported" (not "Unknown (dBm)")
+   - Uptime: Human-readable format (e.g., "1d 4h") or "Not available"
+   - Aligned warnings with actual battery levels
+
+4. **Location Display**
+   - Fixed leading comma bug (", Barpeta" → "Barpeta")
+   - Clean location formatting across all components
+   - Consistent coordinate-to-name mapping
+
+5. **Device Management**
+   - Deduplication: Only latest reading per device shown
+   - Test device identification: Tagged with "(Test Device)" label
+   - No duplicate cards with different timestamps
+
+6. **Code Quality**
+   - All ESLint warnings resolved
+   - Proper React Hooks dependencies
+   - Removed unused imports and variables
+   - Performance optimized with useCallback
+
+### 📁 New Utilities
+
+**`DashBoard_Frontend/src/utils/waterQuality.ts`**
+- `getWaterQualityClassification()` - Centralized WQI labeling
+- `getBatteryStatus()` - Battery health calculation
+- `getSignalStatus()` - Signal strength classification
+- `formatUptime()` - Human-readable uptime
+- `formatLocation()` - Clean location strings
+- `getDeviceFriendlyName()` - User-friendly device names
+- `isTestDevice()` - Test device detection
+- `WQI_LEGEND` - Standardized legend data
+
+### 📊 Improved Components
+
+- `DeviceHealthCard.tsx` - Consistent WQI, battery, signal display
+- `MapPage.tsx` - Unified legend and marker colors
+- `Trends.tsx` - Fixed pH scale, better empty states
+- `MLDashboard.tsx` - Deduplicated device listings
 
 ## 🎯 Use Cases
 
-1. **Health Officials**: Monitor outbreak risk across regions
-2. **Water Quality Teams**: Track sensor health and water parameters
-3. **District Administrators**: Location-specific filtering and alerts
-4. **Field Workers**: Village-level device monitoring
-5. **Emergency Response**: Real-time alert notifications
+1. **Citizens**: Report waterborne disease symptoms via web/mobile interface
+2. **Health Officials**: Monitor outbreak risk scores and symptom clusters across regions
+3. **Water Quality Teams**: Track sensor health, water parameters, and correlate with symptom reports
+4. **District Administrators**: Location-specific filtering, alerts, and outbreak risk assessment
+5. **Field Workers**: Village-level device monitoring and symptom report verification
+6. **Emergency Response**: Real-time alert notifications and outbreak risk warnings
 
 ## 🔐 Security Features
 
@@ -238,8 +352,31 @@ Developed for Smart India Hackathon 2024
 
 For issues and questions, please contact the development team.
 
+## 🐛 Known Issues & Backend Requirements
+
+### Items Requiring Backend Implementation
+
+1. **WQI Calculation**
+   - Current: Returns constant 50.0 for most devices
+   - Required: Implement actual WQI calculation based on sensor parameters
+   - Formula: Weighted average of pH, TDS, turbidity, temperature sub-indices
+
+2. **Device Telemetry**
+   - Current: Battery, signal, uptime data not available from most devices
+   - Required: IoT devices should send battery voltage/percentage, signal strength (RSSI), uptime
+   - Frontend: Already handles missing data gracefully with "Not reported" messages
+
+3. **Test Device Filtering**
+   - Current: TEST-VERIFY-001 appears in production data
+   - Recommendation: Add `isTestDevice` flag in device registry
+   - Frontend: Already tags test devices with "(Test Device)" label
+
+### Frontend Status: ✅ Demo Ready
+
+All frontend issues have been resolved. The application presents a professional, polished interface suitable for SIH demonstration.
+
 ---
 
-**Last Updated**: November 25, 2025  
-**Version**: 1.0.0  
-**Status**: Production Ready ✅
+**Last Updated**: November 26, 2025  
+**Version**: 1.1.0  
+**Status**: Production Ready ✅ (Frontend optimized for SIH Demo)

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useGlobalFilter } from '../contexts/GlobalFilterContext';
-import LocationFilter from '../components/LocationFilter';
-import WaterQualityCard from '../components/WaterQualityCard';
-import { DeviceInfo, getDevicesByLocation } from '../services/waterQuality.service';
-import '../App.css';
+import { useGlobalFilter } from '../../contexts/GlobalFilterContext';
+import LocationFilter from '../../features/filters/LocationFilter';
+import WaterQualityCard from '../../components/WaterQualityCard';
+import { DeviceInfo, getDevicesByLocation } from '../../services/waterQuality.service';
+import '../../App.css';
 
 const DashboardUpdated: React.FC = () => {
   const { filter, updateFilter } = useGlobalFilter();
@@ -36,7 +36,7 @@ const DashboardUpdated: React.FC = () => {
         filter.village || undefined
       );
       setDevices(fetchedDevices);
-      
+
       // Don't auto-select - let user choose
       // If filter has deviceId, restore it
       if (filter.deviceId && fetchedDevices.length > 0) {
@@ -65,7 +65,7 @@ const DashboardUpdated: React.FC = () => {
   const handleDevicesChange = (newDevices: DeviceInfo[]) => {
     setDevices(newDevices);
     setLoading(false);
-    
+
     // Don't auto-select - let user choose
     // Only restore if deviceId exists in filter
     if (filter.deviceId && newDevices.length > 0) {
@@ -96,13 +96,7 @@ const DashboardUpdated: React.FC = () => {
   return (
     <div className="page-content">
       {/* Header */}
-      <div className="dashboard-header-new">
-        <h1>ArogyaJal Water Quality Dashboard</h1>
-        <p className="subtitle">Real-time monitoring across North East India</p>
-        <p className="region-info">
-          Assam • Meghalaya • Arunachal Pradesh • Nagaland • Manipur • Mizoram • Tripura • Sikkim
-        </p>
-      </div>
+
 
       {/* Location Filter */}
       <LocationFilter
@@ -181,23 +175,7 @@ const DashboardUpdated: React.FC = () => {
 
 
       <style jsx>{`
-        .dashboard-header-new {
-          background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-          color: white;
-          padding: 2rem;
-          border-radius: 12px;
-          margin-bottom: 2rem;
-          text-align: center;
-          box-shadow: 0 4px 15px rgba(14, 165, 233, 0.2);
-        }
 
-        .dashboard-header-new h1 {
-          margin: 0 0 0.5rem 0;
-          font-size: 2rem;
-          font-weight: 600;
-        }
-
-        .subtitle {
           margin: 0.5rem 0;
           font-size: 1.1rem;
           opacity: 0.9;

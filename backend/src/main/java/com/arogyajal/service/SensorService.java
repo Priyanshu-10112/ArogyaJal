@@ -3,6 +3,7 @@ package com.arogyajal.service;
 import com.arogyajal.dto.SensorData;
 import com.arogyajal.model.SensorReading;
 import com.arogyajal.repository.SensorRepository;
+import com.arogyajal.util.WQICalculator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.Cacheable;
@@ -141,36 +142,28 @@ public class SensorService {
                 // Check sensor health
                 sensorHealthMonitorService.checkSensorHealth(deviceId, hasSufficientData, reading);
                 
-                // Only call ML service if we have at least 3 sensors
+                // Calculate WQI using formula-based calculator
                 if (hasSufficientData) {
                     try {
-                        MLPredictionService.WQIPrediction prediction = mlPredictionService.predictWQI(
+                        double wqi = WQICalculator.calculateWQI(
                             reading.getPh(),
-                            reading.getTemperature(),
+                            reading.getTurbidity(),
                             reading.getTotalDissolvedSolids(),
-                            reading.getTurbidity()
+                            reading.getTemperature()
                         );
                         
-                        if (prediction.isSuccess()) {
-                            reading.setWqi(prediction.getWqi());
-                            reading.setQualityStatus(prediction.getQualityStatus());
-                            log.info("✅ ML Prediction - WQI: {}, Status: {}", prediction.getWqi(), prediction.getQualityStatus());
-                        } else {
-                            // Fallback: Set default values and calculate quality status
-                            reading.setWqi(50.0);
-                            reading.setQualityStatus(calculateQualityStatus(reading));
-                            log.warn("⚠️ ML prediction failed, using fallback - WQI: 50.0, Status: {}", reading.getQualityStatus());
-                        }
+                        reading.setWqi(wqi);
+                        reading.setQualityStatus(WQICalculator.getSeverityLevel(wqi));
+                        log.info("✅ WQI Calculated - WQI: {}, Status: {}", wqi, reading.getQualityStatus());
+                        
                     } catch (Exception e) {
-                        log.error("❌ Error calling ML service: {}, using fallback calculation", e.getMessage());
-                        // Fallback: Set default values and calculate quality status
+                        log.error("❌ Error calculating WQI: {}, using fallback", e.getMessage());
                         reading.setWqi(50.0);
                         reading.setQualityStatus(calculateQualityStatus(reading));
-                        log.warn("⚠️ Fallback applied - WQI: 50.0, Status: {}", reading.getQualityStatus());
                     }
                 } else {
-                    // Not enough sensors for ML prediction
-                    log.warn("Insufficient sensor data ({} sensors) for ML prediction. Setting defaults", availableSensors);
+                    // Not enough sensors for WQI calculation
+                    log.warn("Insufficient sensor data ({} sensors) for WQI calculation. Setting defaults", availableSensors);
                     reading.setWqi(50.0);
                     reading.setQualityStatus("UNKNOWN");
                 }

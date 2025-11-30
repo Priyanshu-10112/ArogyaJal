@@ -1,6 +1,6 @@
 {
   "name": "arogya-jal-dashboard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "dependencies": {
     "@dataconnect/generated": "file:src/dataconnect-generated",

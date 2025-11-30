@@ -126,7 +126,7 @@ public class SymptomClusterController {
         }
         
         try {
-            // Get clusters from ML service via symptom-clusters endpoint
+            // Get clusters from backend's ML controller (which handles ML service communication)
             String mlUrl = "http://localhost:8080/api/symptom-clusters";
             ResponseEntity<Map> response = restTemplate.getForEntity(mlUrl, Map.class);
             Map<String, Object> clusterData = response.getBody();
@@ -171,6 +171,34 @@ public class SymptomClusterController {
                 transformed.put("overallSeverity", severity);
                 transformed.put("status", "ACTIVE");
                 transformed.put("clusterScore", score);
+                transformed.put("reports", reports); // CRITICAL: Include reports array for Firestore save
+                
+                // Add state/region for frontend filtering
+                // Guwahati, Kamrup are in Assam
+                String state = "Assam"; // Default for NER
+                if (location != null) {
+                    String locationLower = location.toLowerCase();
+                    if (locationLower.contains("guwahati") || locationLower.contains("kamrup") || 
+                        locationLower.contains("kamakhya") || locationLower.contains("assam")) {
+                        state = "Assam";
+                    } else if (locationLower.contains("shillong") || locationLower.contains("meghalaya")) {
+                        state = "Meghalaya";
+                    } else if (locationLower.contains("arunachal")) {
+                        state = "Arunachal Pradesh";
+                    } else if (locationLower.contains("nagaland")) {
+                        state = "Nagaland";
+                    } else if (locationLower.contains("manipur")) {
+                        state = "Manipur";
+                    } else if (locationLower.contains("mizoram")) {
+                        state = "Mizoram";
+                    } else if (locationLower.contains("tripura")) {
+                        state = "Tripura";
+                    } else if (locationLower.contains("sikkim")) {
+                        state = "Sikkim";
+                    }
+                }
+                transformed.put("state", state);
+                transformed.put("region", "North East India");
                 
                 // Extract dominant symptoms from ML response
                 List<List<Object>> dominantSymptoms = (List<List<Object>>) cluster.get("dominant_symptoms");

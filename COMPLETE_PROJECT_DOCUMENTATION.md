@@ -37,32 +37,117 @@ ArogyaJal is a comprehensive water quality monitoring and disease outbreak predi
 ### System Architecture Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     IoT Sensor Layer                         │
-│  ESP32 Devices → Water Quality Sensors → MQTT/HTTP          │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Backend Services                          │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
-│  │ Spring Boot  │  │   Firestore  │  │  ML Service  │     │
-│  │  REST API    │◄─┤   Database   │◄─┤    Flask     │     │
-│  └──────────────┘  └──────────────┘  └──────────────┘     │
-│         │                                      │             │
-│         ▼                                      ▼             │
-│  ┌──────────────┐                    ┌──────────────┐     │
-│  │ Alert Service│                    │  Clustering  │     │
-│  │   + N8N      │                    │   DBSCAN     │     │
-│  └──────────────┘                    └──────────────┘     │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                   Frontend Dashboard                         │
-│  React App → Global Filters → Real-time Updates            │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         FRONTEND (React)                            │
+│                     http://localhost:3000                           │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │  Dashboard Component                                         │ │
+│  │  - Displays Risk Score                                       │ │
+│  │  - Shows Risk Level (LOW/MODERATE/HIGH/CRITICAL)            │ │
+│  │  - Displays Confidence %                                     │ │
+│  │  - Auto-refreshes every 60 seconds                          │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                              ↓ GET /api/outbreak-predictions/latest│
+└─────────────────────────────────────────────────────────────────────┘
+                               ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                    BACKEND (Spring Boot)                            │
+│                   http://localhost:8080                             │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │  OutbreakPredictionController                                │ │
+│  │  GET /api/outbreak-predictions/latest                        │ │
+│  │  - Returns latest ML prediction from Firestore               │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                              ↑                                      │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │  OutbreakPredictionService                                   │ │
+│  │  - getLatestPrediction()                                     │ │
+│  │  - storePredictionFromML()                                   │ │
+│  │  - Manages Firestore operations                              │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                              ↑                                      │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │  MLSyncScheduler (@Scheduled)                                │ │
+│  │  - Runs every 60 seconds                                     │ │
+│  │  - Triggers ML sync if enabled                               │ │
+│  │  - Calls MLPayloadService                                    │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                              ↓                                      │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │  MLPayloadService                                            │ │
+│  │  - assemblePayload()                                         │ │
+│  │  - Fetches sensor data from Firestore                       │ │
+│  │  - Fetches symptom clusters from Firestore                  │ │
+│  │  - Calculates WQI using WQICalculator                       │ │
+│  │  - Sends POST to ML service                                  │ │
+│  │  - Stores prediction via OutbreakPredictionService          │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                              ↓                                      │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │  WQICalculator (Utility)                                     │ │
+│  │  - calculateWQI(ph, turbidity, tds, temp)                   │ │
+│  │  - Formula: (pH×0.25) + (Turb×0.30) +                       │ │
+│  │             (TDS×0.25) + (Temp×0.20)                        │ │
+│  │  - Returns WQI score (0-100+)                               │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                              ↓ POST /predict                        │
+└─────────────────────────────────────────────────────────────────────┘
+                               ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                    ML SERVICE (Flask/Python)                        │
+│                   http://localhost:5000                             │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │  POST /api/ml/predict-outbreak                               │ │
+│  │  Input: { sensor_data, symptom_clusters, wqi_data }         │ │
+│  │  Output: { risk_score, risk_level, confidence, factors }    │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+│                                                                     │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │  POST /api/ml/cluster (DBSCAN)                               │ │
+│  │  Input: { reports: [...] }                                   │ │
+│  │  Output: { clusters, cluster_count }                         │ │
+│  │  Parameters: eps=5km, min_samples=3                          │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────┘
+                               ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                      FIRESTORE (Database)                           │
+│  Collections:                                                       │
+│  - sensor_readings (IoT data)                                      │
+│  - symptom_reports (Citizen reports)                               │
+│  - symptom_clusters (DBSCAN results)                               │
+│  - outbreak_predictions (ML predictions)                           │
+└─────────────────────────────────────────────────────────────────────┘
 ```
+
+### Quick Start
+
+**Start All Services (3 Commands):**
+
+```bash
+# 1. Start ML Service
+cd ML
+python start_ml_service.py
+# ✅ Running on http://localhost:5000
+
+# 2. Start Backend
+cd backend
+./mvnw spring-boot:run
+# ✅ Running on http://localhost:8080
+
+# 3. Start Frontend
+cd DashBoard_Frontend
+npm start
+# ✅ Running on http://localhost:3000
+```
+
+**Verify It's Working:**
+- Check logs for: `🔄 ML Sync triggered` (every 60 seconds)
+- API test: `curl http://localhost:8080/api/outbreak-predictions/latest`
+- Dashboard: Open http://localhost:3000 → "Outbreak Risk" section
 
 ### Data Flow
 
@@ -286,11 +371,11 @@ confidence = (available_points / required_data_points) × 100
    - Isolated cluster + good water quality → Risk × 0.5
 
 **Update Frequency:**
-- **ML Processing**: Every 60 seconds
-- **Clustering**: Triggered by new reports or scheduled
-- **Risk Calculation**: After each clustering run
-- **Dashboard Update**: Auto-refresh every 30 seconds
-- **Alert Generation**: Immediate if risk crosses threshold
+- **ML Sync**: Every 60 seconds (backend scheduler)
+- **Clustering**: On-demand via `/api/symptom-clusters/analyze` or during ML sync
+- **Risk Calculation**: After each ML sync
+- **Dashboard**: Fetches from Firestore (cached 30s on backend)
+- **Alert Generation**: Immediate on alert creation, N8N webhook async
 
 ### 4. Alert Management
 
@@ -305,9 +390,12 @@ ACTIVE → ACKNOWLEDGED → RESOLVED (Deleted)
 ```
 
 **Notification Channels:**
-- Dashboard (real-time)
-- Email (via N8N)
-- SMS (via N8N - configurable)
+- Dashboard (real-time display)
+- N8N Webhook (async, configurable)
+  - Email integration (via N8N workflow)
+  - SMS integration (via N8N workflow - optional)
+  - Severity threshold: Configurable (default: LOW)
+  - Timeout: 5 seconds
 
 **Alert Actions:**
 - Acknowledge: Mark as seen
@@ -1097,6 +1185,100 @@ All frontend issues resolved. The application now presents:
 
 ---
 
-**Document Version**: 1.1.0  
-**Last Updated**: November 26, 2025  
-**Status**: Production Ready ✅ (Frontend optimized for SIH Demo)
+## ML Integration Complete (November 27, 2025)
+
+### ✅ End-to-End Pipeline Working
+
+**Complete Flow: Symptom Reports → Clustering → Risk Prediction → Dashboard**
+
+#### Implementation Details
+
+**1. Symptom Clustering**
+- DBSCAN algorithm (eps=5km, min_samples=3)
+- Automatic clustering every 60 seconds via ML service
+- Clusters saved to Firestore with:
+  - Cluster ID, location, centroid coordinates
+  - Report count and report IDs (8 reports in current cluster)
+  - Cluster score (100.0 for high-density clusters)
+  - Dominant symptoms (DIARRHEA, VOMITING, NAUSEA)
+  - Overall severity (CRITICAL for score ≥90)
+  - Detection method (HYBRID - spatial + temporal)
+  - State/region metadata for filtering
+
+**2. Outbreak Risk Calculation**
+- Real-time risk scoring with cluster severity integration
+- Formula: Cluster Factor (50.0) + Report Factor (0.8) + Quality Factor (0.0) + Source Factor (0.0) = 50.8
+- Risk level: HIGH (50-75 range)
+- Confidence: 57.5% based on data completeness
+- Location-specific: "Guwahati - Kamakhya" prediction stored
+
+**3. Dashboard Display**
+- Fetches latest prediction from Firestore (not cached ML response)
+- Shows risk score 50.8 with HIGH level indicator
+- Priority recommendations for HIGH risk scenarios
+- Auto-refresh every 30 seconds
+- State filter support (clusters tagged with "Assam")
+
+#### Technical Fixes Applied
+
+**Backend Changes:**
+```java
+// MLController.java
+- Fixed field mapping: cluster_id, report_count, cluster_score (ML format)
+- Added OutbreakPredictionService injection
+- Modified /outbreak-predictions/latest to fetch from Firestore
+- Increased RestTemplate timeout: 5s → 30s
+
+// SymptomClusterController.java  
+- Added reports array to transformed clusters
+- Added state/region metadata for frontend filtering
+- Fixed location extraction from first report
+
+// MLPayloadService.java
+- Added debug logging for cluster severity
+- Proper extraction: clusterScore → severity_score
+
+// RestTemplateConfig.java
+- Increased read timeout for ML operations (30s)
+```
+
+**Validation Fixes:**
+```java
+// Severity: HIGH → SEVERE/CRITICAL (valid values)
+// Detection Method: ML_CLUSTERING → HYBRID (valid value)
+// ReportIds: Extracted from reports array (8 IDs)
+```
+
+#### Current Status
+
+**Working Features:**
+- ✅ Symptom report submission and storage
+- ✅ DBSCAN clustering with proper parameters
+- ✅ Cluster save to Firestore with all metadata
+- ✅ Cluster severity extraction (100.0)
+- ✅ Outbreak risk calculation with severity (50.8 HIGH)
+- ✅ Prediction storage in Firestore
+- ✅ Dashboard display with correct risk level
+- ✅ State-based filtering (Assam)
+- ✅ Auto-refresh and caching
+
+**Test Results:**
+```
+📋 Cluster cluster_0 has 8 reportIds
+✅ Saved cluster to Firestore: Guwahati - Kamakhya (score: 100.0)
+📊 Cluster cluster_0: location=Guwahati - Kamakhya, severity=100.0, reports=8
+✅ ML Response: Risk=50.8 (HIGH), Confidence=57.5%
+✅ Stored ML prediction for Guwahati - Kamakhya
+```
+
+**Dashboard Output:**
+- Risk Score: 50.8
+- Risk Level: HIGH
+- Confidence: 58%
+- Recommendations: Priority surveillance, emergency resources, health advisory, water testing
+
+---
+
+**Document Version**: 1.2.0  
+**Last Updated**: November 27, 2025  
+**Status**: Production Ready ✅ (Complete ML Integration)

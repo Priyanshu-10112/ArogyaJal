@@ -1,5 +1,6 @@
 package com.arogyajal.controller;
 
+import com.arogyajal.model.OutbreakPrediction;
 import com.arogyajal.model.SymptomReport;
 import com.arogyajal.service.SymptomService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -38,16 +39,22 @@ public class MLController {
     private final RestTemplate restTemplate;
     private final SymptomService symptomService;
     private final CacheManager cacheManager;
+    private final com.arogyajal.service.SymptomClusterService clusterService;
+    private final com.arogyajal.service.OutbreakPredictionService outbreakPredictionService;
     
     // Simple cache for symptom clusters (30 second TTL)
     private Map<String, Object> cachedSymptomClusters = null;
     private long clusterCacheTimestamp = 0;
     private static final long CLUSTER_CACHE_TTL_MS = 30000; // 30 seconds
     
-    public MLController(RestTemplate restTemplate, SymptomService symptomService, CacheManager cacheManager) {
+    public MLController(RestTemplate restTemplate, SymptomService symptomService, CacheManager cacheManager, 
+                       com.arogyajal.service.SymptomClusterService clusterService,
+                       com.arogyajal.service.OutbreakPredictionService outbreakPredictionService) {
         this.restTemplate = restTemplate;
         this.symptomService = symptomService;
+        this.outbreakPredictionService = outbreakPredictionService;
         this.cacheManager = cacheManager;
+        this.clusterService = clusterService;
     }
     
     /**
@@ -131,6 +138,9 @@ public class MLController {
                 // Update cache
                 cachedSymptomClusters = result;
                 clusterCacheTimestamp = now;
+                
+                // PERMANENT FIX: Save clusters to Firestore (after cache update)
+                saveClustersToFirestore(result);
                 
                 // Evict dashboard stats cache since cluster count changed
                 evictDashboardCache();
@@ -254,10 +264,33 @@ public class MLController {
      * Alias for /outbreak-predictions for frontend compatibility
      */
     @GetMapping("/outbreak-predictions/latest")
-    @Operation(summary = "Get latest outbreak predictions", description = "Retrieve latest outbreak prediction analysis from ML service")
+    @Operation(summary = "Get latest outbreak predictions", description = "Retrieve latest stored outbreak prediction from Firestore")
     public ResponseEntity<Map<String, Object>> getLatestOutbreakPredictions() {
-        log.info("Fetching latest outbreak predictions from ML service");
-        return getOutbreakPredictions(); // Reuse the same logic
+        log.info("Fetching latest outbreak prediction from Firestore");
+        try {
+            OutbreakPrediction latest = outbreakPredictionService.getLatestPrediction();
+            if (latest == null) {
+                log.warn("No predictions found in Firestore, fetching from ML service");
+                return getOutbreakPredictions();
+            }
+            
+            // Convert to ML response format for dashboard compatibility
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("risk_score", latest.getRiskScore());
+            response.put("risk_level", latest.getRiskLevel());
+            response.put("confidence", latest.getConfidence());
+            response.put("contributing_factors", latest.getContributingFactors());
+            response.put("recommendations", latest.getRecommendedActions());
+            
+            log.info("✅ Returning stored prediction: Risk={} ({}), Confidence={}%", 
+                    latest.getRiskScore(), latest.getRiskLevel(), latest.getConfidence());
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error fetching latest prediction from Firestore: {}", e.getMessage());
+            return getOutbreakPredictions(); // Fallback to ML service
+        }
     }
     
     @GetMapping("/risk-assessment")
@@ -407,5 +440,164 @@ public class MLController {
         response.put("message", "No risk data available - either ML service is unavailable or no data for location");
         response.put("status", "empty");
         return response;
+    }
+    
+    /**
+     * Save ML clustering results to Firestore for persistence
+     * This ensures clusters are available for outbreak prediction
+     */
+    private void saveClustersToFirestore(Map<String, Object> clusteringResult) {
+        try {
+            // First, clear old clusters
+            try {
+                List<com.arogyajal.model.SymptomCluster> oldClusters = clusterService.getActiveClusters();
+                for (com.arogyajal.model.SymptomCluster old : oldClusters) {
+                    clusterService.deleteCluster(old.getId());
+                }
+                if (!oldClusters.isEmpty()) {
+                    log.info("🗑️ Cleared {} old clusters from Firestore", oldClusters.size());
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ Could not clear old clusters: {}", e.getMessage());
+            }
+            
+            // Extract clusters from ML response
+            Object clustersObj = clusteringResult.get("clusters");
+            if (!(clustersObj instanceof List)) {
+                log.warn("⚠️ No clusters array in ML response");
+                return;
+            }
+            
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> clusters = (List<Map<String, Object>>) clustersObj;
+            
+            int savedCount = 0;
+            for (Map<String, Object> clusterData : clusters) {
+                try {
+                    // Create SymptomCluster entity
+                    com.arogyajal.model.SymptomCluster cluster = new com.arogyajal.model.SymptomCluster();
+                    
+                    // Set ID (ML sends "cluster_id")
+                    String clusterId = (String) clusterData.get("cluster_id");
+                    if (clusterId == null) {
+                        clusterId = (String) clusterData.get("id"); // fallback
+                    }
+                    if (clusterId == null) {
+                        clusterId = "cluster_" + System.currentTimeMillis() + "_" + savedCount;
+                    }
+                    cluster.setId(clusterId);
+                    
+                    // Set location - extract from first report
+                    String location = null;
+                    Object reportsObj = clusterData.get("reports");
+                    if (reportsObj instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> reports = (List<Map<String, Object>>) reportsObj;
+                        if (!reports.isEmpty()) {
+                            location = (String) reports.get(0).get("location");
+                        }
+                    }
+                    if (location == null || location.trim().isEmpty()) {
+                        location = "Cluster_" + savedCount;
+                    }
+                    cluster.setLocation(location);
+                    
+                    // Set cluster score (ML sends "cluster_score")
+                    Object scoreObj = clusterData.get("cluster_score");
+                    if (scoreObj == null) {
+                        scoreObj = clusterData.get("clusterScore"); // fallback
+                    }
+                    if (scoreObj instanceof Number) {
+                        cluster.setClusterScore(((Number) scoreObj).doubleValue());
+                    }
+                    
+                    // Set report count (ML sends "report_count")
+                    Object countObj = clusterData.get("report_count");
+                    if (countObj == null) {
+                        countObj = clusterData.get("reportCount"); // fallback
+                    }
+                    if (countObj instanceof Number) {
+                        cluster.setReportCount(((Number) countObj).intValue());
+                    }
+                    
+                    // Set report IDs (required for validation)
+                    List<String> reportIds = new ArrayList<>();
+                    if (reportsObj instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> reports = (List<Map<String, Object>>) reportsObj;
+                        for (Map<String, Object> report : reports) {
+                            Object idObj = report.get("id");
+                            if (idObj != null) {
+                                reportIds.add(idObj.toString());
+                            }
+                        }
+                    }
+                    cluster.setReportIds(reportIds);
+                    
+                    log.info("📋 Cluster {} has {} reportIds: {}", clusterId, reportIds.size(), reportIds);
+                    
+                    // Set dominant symptoms (ML sends "dominant_symptoms" as [[symptom, count], ...])
+                    Object symptomsObj = clusterData.get("dominant_symptoms");
+                    if (symptomsObj == null) {
+                        symptomsObj = clusterData.get("dominantSymptoms"); // fallback
+                    }
+                    List<String> dominantSymptoms = new ArrayList<>();
+                    if (symptomsObj instanceof List) {
+                        @SuppressWarnings("unchecked")
+                        List<?> symptomsList = (List<?>) symptomsObj;
+                        for (Object item : symptomsList) {
+                            if (item instanceof List) {
+                                // ML format: [["DIARRHEA", 6], ["VOMITING", 4]]
+                                List<?> symptomPair = (List<?>) item;
+                                if (!symptomPair.isEmpty()) {
+                                    dominantSymptoms.add(symptomPair.get(0).toString());
+                                }
+                            } else if (item instanceof String) {
+                                // Already string format
+                                dominantSymptoms.add((String) item);
+                            }
+                        }
+                    }
+                    cluster.setDominantSymptoms(dominantSymptoms);
+                    
+                    // Set status
+                    cluster.setStatus("ACTIVE");
+                    
+                    // Set overall severity based on cluster score
+                    // Valid values: MILD, MODERATE, SEVERE, CRITICAL
+                    double score = cluster.getClusterScore() != null ? cluster.getClusterScore() : 0;
+                    String severity;
+                    if (score >= 90) {
+                        severity = "CRITICAL";
+                    } else if (score >= 75) {
+                        severity = "SEVERE";
+                    } else if (score >= 50) {
+                        severity = "MODERATE";
+                    } else {
+                        severity = "MILD";
+                    }
+                    cluster.setOverallSeverity(severity);
+                    
+                    // Set detection metadata (valid: SPATIAL, TEMPORAL, HYBRID, MANUAL)
+                    cluster.setDetectionMethod("HYBRID"); // ML clustering uses spatial + temporal
+                    cluster.setDetectedAt(com.google.cloud.Timestamp.now());
+                    
+                    // Save to Firestore
+                    clusterService.createCluster(cluster);
+                    savedCount++;
+                    
+                    log.info("✅ Saved cluster to Firestore: {} (score: {})", 
+                            cluster.getLocation(), cluster.getClusterScore());
+                    
+                } catch (Exception e) {
+                    log.error("❌ Failed to save cluster: {}", e.getMessage());
+                }
+            }
+            
+            log.info("💾 Saved {} clusters to Firestore for ML outbreak prediction", savedCount);
+            
+        } catch (Exception e) {
+            log.error("❌ Error saving clusters to Firestore: {}", e.getMessage(), e);
+        }
     }
 }

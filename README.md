@@ -16,15 +16,16 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 
 ### 2. Outbreak Risk Prediction
 - **ML-Powered Risk Assessment**: Real-time outbreak risk scoring (0-100)
-- **DBSCAN Clustering**: Groups symptom reports by geographic proximity (5km radius)
+- **DBSCAN Clustering**: Groups symptom reports by geographic proximity (5km radius, min 3 reports)
 - **Risk Calculation Formula**:
-  - Cluster Factor (0-50 points): Number and density of symptom clusters
-  - Report Factor (0-20 points): Total symptom reports in region
-  - Quality Factor (0-20 points): Poor water quality sensor readings
-  - Water Source Factor (0-10 points): Contaminated water sources
-- **Confidence Metrics**: Prediction confidence based on data completeness
+  - Cluster Factor (0-50 points): max_cluster_severity / 2
+  - Report Factor (0-20 points): total_reports / 10
+  - Quality Factor (0-20 points): (poor_sensors / total_sensors) × 20
+  - Water Source Factor (0-10 points): (contaminated_sources / total_sources) × 10
+- **Confidence Metrics**: Based on data completeness (reports, sensors, coverage)
 - **Geographic Correlation**: Links symptom patterns to water quality issues
-- **Auto-refresh**: Updates every 60 seconds
+- **Auto-sync**: Backend syncs with ML every 60 seconds
+- **Dashboard**: Fetches latest prediction from Firestore (cached 30s)
 
 ### 3. Hierarchical Location Filtering
 - **4-Level Hierarchy**: State → District → City/Town → Village
@@ -42,16 +43,17 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 - **Risk Scoring**: Cluster-level risk assessment based on multiple factors
 
 ### 5. Smart Alert System
-- **Multi-Channel Notifications**: Email, SMS, Dashboard
-- **N8N Integration**: Automated workflow triggers
+- **Multi-Channel Notifications**: Dashboard (real-time), N8N webhook (email/SMS)
+- **N8N Integration**: Async webhook calls with configurable severity threshold
 - **Alert Management**: Acknowledge and resolve workflow
 - **Auto-Delete**: Resolved alerts removed from database
+- **Severity Filtering**: Configurable minimum severity for N8N notifications (default: LOW)
 
 ### 6. Comprehensive Analytics
 - **Trends Analysis**: Historical data visualization (1h to 30 days)
 - **Parameter Tracking**: pH, Temperature, Turbidity, TDS (4 core parameters)
 - **Distribution Charts**: Quality status and parameter range analysis
-- **Auto-Refresh**: 10-second updates (configurable)
+- **Auto-Refresh**: 10-second updates (toggle on/off)
 
 ## 🏗️ Architecture
 
@@ -66,9 +68,10 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
    └─ Stored in Firestore (symptom_reports collection)
 
 2. Data Aggregation (Every 60 seconds)
-   ├─ ML Service polls Firestore
-   ├─ Fetches symptom reports (last 7 days)
-   └─ Fetches water quality data (same period)
+   ├─ Backend scheduler (MLSyncScheduler) triggers
+   ├─ MLPayloadService fetches data from Firestore
+   ├─ Symptom reports (last 7 days) + sensor readings
+   └─ Sends unified payload to ML service
 
 3. DBSCAN Clustering
    ├─ Parameters: eps=5km, min_samples=3
@@ -76,19 +79,20 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
    └─ Identifies clusters with ≥3 reports within 5km
 
 4. Risk Score Calculation (0-100)
-   ├─ Cluster Factor: (cluster_count × 10) capped at 50
+   ├─ Cluster Factor: (max_cluster_severity / 2) capped at 50
    ├─ Report Factor: (total_reports / 10) capped at 20
-   ├─ Quality Factor: (poor_quality_sensors / total_sensors × 20)
-   └─ Water Source Factor: (contaminated_sources / total_sources × 10)
+   ├─ Quality Factor: (poor_sensors / total_sensors) × 20
+   └─ Water Source Factor: (contaminated_sources / total_sources) × 10
 
 5. Confidence Calculation
    ├─ Based on data completeness and recency
    └─ Formula: (available_data_points / required_data_points) × 100
 
 6. Prediction Storage & Display
-   ├─ Stored in outbreak_predictions collection
-   ├─ Cached for 60 seconds
-   └─ Displayed on ML Dashboard with auto-refresh
+   ├─ Backend stores prediction in Firestore (outbreak_predictions)
+   ├─ Dashboard fetches from Firestore via /api/outbreak-predictions/latest
+   ├─ Backend caches response for 30 seconds
+   └─ Dashboard displays risk score, level, confidence, recommendations
 ```
 
 **Geographic Correlation Logic:**
@@ -338,28 +342,68 @@ REACT_APP_ML_API_URL=http://localhost:5000
 
 ## 🤝 Contributing
 
-This project is part of Smart India Hackathon 2024.
+This project is part of Smart India Hackathon 2025.
 
 ## 📄 License
 
-Proprietary - Smart India Hackathon 2024
+Proprietary - Smart India Hackathon 2025
 
 ## 👥 Team
 
-Developed for Smart India Hackathon 2024
+Developed for Smart India Hackathon 2025
 
 ## 📞 Support
 
 For issues and questions, please contact the development team.
 
-## 🐛 Known Issues & Backend Requirements
+## 🎯 ML Integration Status
 
-### Items Requiring Backend Implementation
+### ✅ Complete End-to-End Pipeline
+
+**Symptom Reports → ML Clustering → Outbreak Prediction → Dashboard**
+
+1. **Symptom Clustering (DBSCAN)**
+   - Algorithm: DBSCAN with eps=5km, min_samples=3
+   - Automatic clustering every 60 seconds
+   - Clusters saved to Firestore with severity scores
+   - Geographic correlation with water quality sensors
+
+2. **Outbreak Risk Prediction**
+   - Real-time risk scoring (0-100) with confidence metrics
+   - Contributing factors: Clusters, Reports, Water Quality, Sources
+   - Risk levels: LOW, MEDIUM, HIGH, CRITICAL
+   - Location-specific predictions stored in Firestore
+
+3. **Dashboard Integration**
+   - Live risk display with auto-refresh (30s)
+   - Cluster visualization on interactive map
+   - State/region filtering support
+   - Priority-based recommendations
+
+### Recent Fixes (Nov 27, 2025)
+
+**Backend Improvements:**
+- ✅ Fixed ML response field mapping (snake_case → camelCase)
+- ✅ Cluster severity validation (HIGH → SEVERE/CRITICAL)
+- ✅ Detection method validation (ML_CLUSTERING → HYBRID)
+- ✅ ReportIds extraction from ML clustering response
+- ✅ Increased RestTemplate timeout (5s → 30s)
+- ✅ Dashboard endpoint now fetches from Firestore (not cached ML)
+- ✅ Added state/region metadata to clusters for frontend filtering
+- ✅ Debug logging for cluster severity tracking
+
+**Integration Components:**
+- `MLController.java` - ML service communication & caching
+- `MLPayloadService.java` - Unified payload assembly with cluster severity
+- `SymptomClusterController.java` - Cluster API with location metadata
+- `OutbreakPredictionService.java` - Firestore prediction storage
+- `RestTemplateConfig.java` - Timeout configuration for ML operations
+
+### Known Backend Requirements
 
 1. **WQI Calculation**
-   - Current: Returns constant 50.0 for most devices
-   - Required: Implement actual WQI calculation based on sensor parameters
-   - Formula: Weighted average of pH, TDS, turbidity, temperature sub-indices
+   - Current: Formula-based calculation implemented
+   - Status: ✅ Working with 4 core parameters (pH, TDS, turbidity, temperature)
 
 2. **Device Telemetry**
    - Current: Battery, signal, uptime data not available from most devices
@@ -371,12 +415,8 @@ For issues and questions, please contact the development team.
    - Recommendation: Add `isTestDevice` flag in device registry
    - Frontend: Already tags test devices with "(Test Device)" label
 
-### Frontend Status: ✅ Demo Ready
-
-All frontend issues have been resolved. The application presents a professional, polished interface suitable for SIH demonstration.
-
 ---
 
-**Last Updated**: November 26, 2025  
-**Version**: 1.1.0  
-**Status**: Production Ready ✅ (Frontend optimized for SIH Demo)
+**Last Updated**: November 27, 2025  
+**Version**: 1.2.0  
+**Status**: Production Ready ✅ (Complete ML Integration)

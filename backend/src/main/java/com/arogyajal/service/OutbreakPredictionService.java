@@ -186,6 +186,109 @@ public class OutbreakPredictionService {
     }
 
     /**
+     * Get latest prediction (most recent by timestamp)
+     */
+    public OutbreakPrediction getLatestPrediction() {
+        try {
+            List<OutbreakPrediction> predictions = getAllPredictions();
+            if (predictions.isEmpty()) {
+                return null;
+            }
+            
+            // Sort by predictedDate descending and return first
+            return predictions.stream()
+                .filter(p -> p.getPredictedDate() != null)
+                .sorted((a, b) -> b.getPredictedDate().compareTo(a.getPredictedDate()))
+                .findFirst()
+                .orElse(null);
+                
+        } catch (Exception e) {
+            log.error("Error getting latest prediction", e);
+            return null;
+        }
+    }
+
+    /**
+     * Store prediction from ML service response with location context
+     */
+    public void storePredictionFromML(Map<String, Object> mlResult, String location) {
+        try {
+            // Extract values from ML response
+            Object riskScoreObj = mlResult.get("risk_score");
+            Object riskLevelObj = mlResult.get("risk_level");
+            Object confidenceObj = mlResult.get("confidence");
+            Object factorsObj = mlResult.get("factors");
+            Object recommendationsObj = mlResult.get("recommendations");
+            
+            double riskScore = riskScoreObj instanceof Number ? 
+                ((Number) riskScoreObj).doubleValue() : 0.0;
+            String riskLevel = riskLevelObj != null ? riskLevelObj.toString() : "UNKNOWN";
+            double confidence = confidenceObj instanceof Number ? 
+                ((Number) confidenceObj).doubleValue() : 0.0;
+            
+            // Convert factors from Map<String, Object> to Map<String, Double>
+            Map<String, Double> factors = new HashMap<>();
+            if (factorsObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> factorsMap = (Map<String, Object>) factorsObj;
+                for (Map.Entry<String, Object> entry : factorsMap.entrySet()) {
+                    if (entry.getValue() instanceof Number) {
+                        factors.put(entry.getKey(), ((Number) entry.getValue()).doubleValue());
+                    }
+                }
+            }
+            
+            // Extract recommendations from ML response
+            List<String> recommendations = new ArrayList<>();
+            if (recommendationsObj instanceof List) {
+                @SuppressWarnings("unchecked")
+                List<Object> recList = (List<Object>) recommendationsObj;
+                for (Object rec : recList) {
+                    if (rec != null) {
+                        recommendations.add(rec.toString());
+                    }
+                }
+            }
+            
+            // Default recommendations if none provided
+            if (recommendations.isEmpty()) {
+                recommendations = Arrays.asList(
+                    "Monitor water quality closely",
+                    "Increase testing frequency",
+                    "Alert health officials"
+                );
+            }
+            
+            // Build prediction object with unique ID
+            String predictionId = "pred_" + location.replaceAll("[^a-zA-Z0-9]", "_") + "_" + System.currentTimeMillis();
+            
+            OutbreakPrediction prediction = OutbreakPrediction.builder()
+                .id(predictionId)
+                .location(location)
+                .riskScore(riskScore)
+                .riskLevel(riskLevel)
+                .confidence(confidence)
+                .contributingFactors(factors)
+                .recommendedActions(recommendations)
+                .status("ACTIVE")
+                .modelVersion("1.1.0")
+                .predictionHorizon(7)
+                .predictedDate(com.google.cloud.Timestamp.now())
+                .build();
+            
+            // Save to Firestore
+            createPrediction(prediction);
+            
+            log.info("✅ Stored ML prediction for {}: Risk={} ({}), Confidence={}%",
+                       location, riskScore, riskLevel, confidence);
+            
+        } catch (Exception e) {
+            log.error("❌ Error storing ML prediction for {}: {}", location, e.getMessage(), e);
+            throw new RuntimeException("Failed to store ML prediction", e);
+        }
+    }
+
+    /**
      * Get predictions by location
      */
     public List<OutbreakPrediction> getPredictionsByLocation(String location) throws ExecutionException, InterruptedException {

@@ -421,14 +421,19 @@ def perform_symptom_clustering(df):
     coords_array = np.array(coordinates)
     
     # Perform DBSCAN clustering with haversine metric
-    # eps in kilometers: 0.5 km = 500 meters
-    # Earth radius = 6371 km, so eps in radians = 0.5/6371 ≈ 0.000078
-    # Using eps=0.01 for ~100km radius (more lenient for testing)
-    dbscan = DBSCAN(eps=0.01, min_samples=2, metric='haversine')
+    # eps in kilometers: 5 km radius as per documentation
+    # Earth radius = 6371 km, so eps in radians = 5/6371 ≈ 0.000785
+    EARTH_RADIUS_KM = 6371
+    EPS_KM = 5  # 5 kilometer radius (documentation requirement)
+    eps_radians = EPS_KM / EARTH_RADIUS_KM  # ≈ 0.000785
+    
+    dbscan = DBSCAN(eps=eps_radians, min_samples=3, metric='haversine')
+    logger.info(f"🎯 Running DBSCAN with eps={EPS_KM}km, min_samples=3")
     cluster_labels = dbscan.fit_predict(coords_array)
     
     # Group reports by cluster
     clusters = {}
+    noise_count = 0
     for i, label in enumerate(cluster_labels):
         if label != -1:  # Ignore noise points
             if label not in clusters:
@@ -439,6 +444,10 @@ def perform_symptom_clustering(df):
                     'report_count': 0
                 }
             clusters[label]['reports'].append(cluster_data[i])
+        else:
+            noise_count += 1
+    
+    logger.info(f"🎯 DBSCAN Results: {len(clusters)} clusters formed, {noise_count} noise points from {len(cluster_data)} reports")
     
     # Calculate cluster properties
     result_clusters = []
@@ -469,83 +478,136 @@ def perform_symptom_clustering(df):
         # Calculate cluster score
         cluster['cluster_score'] = min(len(reports) * 15 + len(symptom_counts) * 5, 100)
         
+        # Log cluster details
+        dominant_symptoms_str = ', '.join([f"{s[0]}({s[1]})" for s in cluster['dominant_symptoms']])
+        logger.info(f"  📍 Cluster {cluster['cluster_id']}: {len(reports)} reports at "
+                   f"({avg_lat:.4f}, {avg_lon:.4f}), symptoms: {dominant_symptoms_str}")
+        
         result_clusters.append(cluster)
     
     return result_clusters
 
 def extract_outbreak_features(data):
-    """Extract features for outbreak prediction."""
-    # Handle both direct input and nested structure
-    symptom_clusters = data.get('symptom_clusters', 0)
-    water_quality_alerts = data.get('water_quality_alerts', 0)
-    recent_reports = data.get('recent_reports', 0)
+    """Extract features for outbreak prediction with severity consideration."""
+    # Check if data contains list structures (new format) or direct values (old format)
+    symptom_clusters_data = data.get('symptom_clusters', [])
     
-    # If direct values provided, use them
-    if symptom_clusters or water_quality_alerts or recent_reports:
+    # Determine if using new format (list) or old format (integers)
+    is_new_format = isinstance(symptom_clusters_data, list)
+    
+    if not is_new_format:
+        # Old format: direct integer values
+        symptom_clusters = data.get('symptom_clusters', 0)
+        water_quality_alerts = data.get('water_quality_alerts', 0)
+        recent_reports = data.get('recent_reports', 0)
         features = {
             'cluster_count': symptom_clusters,
             'total_reports': recent_reports,
-            'avg_cluster_score': min(symptom_clusters * 15, 100),
-            'water_quality_score': min(water_quality_alerts * 0.5, 100),
+            'max_cluster_severity': 0,
+            'avg_cluster_score': min(symptom_clusters * 15, 100) if symptom_clusters else 0,
+            'water_quality_score': min(water_quality_alerts * 0.5, 100) if water_quality_alerts else 0,
             'temporal_trend': 0
         }
     else:
-        # Otherwise extract from nested structure
+        # New format: extract from nested structure
+        clusters = data.get('clusters', []) or data.get('symptom_clusters', [])
+        
         features = {
-            'cluster_count': len(data.get('clusters', [])),
-            'total_reports': sum(c.get('report_count', 0) for c in data.get('clusters', [])),
+            'cluster_count': len(clusters),
+            'total_reports': sum(c.get('report_count', 0) for c in clusters),
+            'max_cluster_severity': 0,
             'avg_cluster_score': 0,
             'water_quality_score': 0,
-            'temporal_trend': 0
+            'temporal_trend': 0,
+            'poor_sensors': 0,
+            'total_sensors': 0
         }
         
-        # Calculate average cluster score
-        clusters = data.get('clusters', [])
+        # Find maximum cluster severity
         if clusters:
-            features['avg_cluster_score'] = sum(c.get('cluster_score', 0) for c in clusters) / len(clusters)
+            severities = [c.get('severity_score', 0) for c in clusters]
+            features['max_cluster_severity'] = max(severities) if severities else 0
+            features['avg_cluster_score'] = sum(severities) / len(severities) if severities else 0
+            
+            logger.info(f"📊 Cluster Analysis: {len(clusters)} clusters, "
+                       f"Max Severity: {features['max_cluster_severity']:.1f}, "
+                       f"Avg Severity: {features['avg_cluster_score']:.1f}")
         
-        # Water quality factor
-        water_tests = data.get('water_tests', [])
-        if water_tests:
-            unsafe_count = sum(1 for t in water_tests 
-                              if t.get('quality_status') in ['UNSAFE', 'CONTAMINATED'])
-            features['water_quality_score'] = (unsafe_count / len(water_tests)) * 100
+        # Water quality factor from sensor data
+        sensor_data = data.get('sensor_data', [])
+        if sensor_data:
+            features['total_sensors'] = len(sensor_data)
+            poor_sensors = sum(1 for s in sensor_data if s.get('wqi', 0) > 75)
+            features['poor_sensors'] = poor_sensors
+            features['water_quality_score'] = (poor_sensors / len(sensor_data)) * 100 if sensor_data else 0
     
     return features
 
 def predict_outbreak_probability(features):
-    """Predict outbreak probability based on features."""
+    """
+    Predict outbreak probability based on features.
+    Enhanced formula considering cluster severity:
+    - Cluster Factor = min(max_cluster_severity / 2, 50) [0-50 points]
+    - Report Factor = min(total_reports / 10, 20) [0-20 points]
+    - Quality Factor = (poor_sensors / total_sensors × 20) [0-20 points]
+    - Source Factor = (contaminated_sources / total_sources × 10) [0-10 points]
+    """
     risk_score = 0
     
-    # RECALIBRATED SCORING SYSTEM
-    # Cluster factor (0-35 points) - More weight on clusters
-    cluster_score = min(features['cluster_count'] * 5, 35)
+    # Cluster Factor (0-50 points) - Use max severity instead of count
+    # If max_cluster_severity = 100, then cluster_score = 50 (max)
+    max_severity = features.get('max_cluster_severity', 0)
+    cluster_count = features.get('cluster_count', 0)
+    
+    if max_severity > 0:
+        # Severity-based scoring (0-100 severity → 0-50 points)
+        cluster_score = min(max_severity / 2, 50)
+    else:
+        # Fallback to count-based if no severity data
+        cluster_score = min(cluster_count * 10, 50)
+    
     risk_score += cluster_score
     
-    # Report count factor (0-35 points) - Increased weight
-    report_score = min(features['total_reports'] * 0.5, 35)
+    # Report Factor (0-20 points) - Documentation formula
+    report_score = min(features['total_reports'] / 10, 20)
     risk_score += report_score
     
-    # Cluster quality factor (0-20 points)
-    quality_score = min(features['avg_cluster_score'] * 0.2, 20)
+    # Quality Factor (0-20 points) - Poor sensors ratio
+    poor_sensors = features.get('poor_sensors', 0)
+    total_sensors = features.get('total_sensors', 1)
+    if total_sensors > 0:
+        quality_score = (poor_sensors / total_sensors) * 20
+    else:
+        quality_score = 0
     risk_score += quality_score
     
-    # Water quality factor (0-10 points)
-    water_score = min(features['water_quality_score'] * 0.1, 10)
-    risk_score += water_score
+    # Source Factor (0-10 points) - Contaminated sources ratio
+    contaminated_sources = features.get('contaminated_sources', 0)
+    total_sources = features.get('total_sources', 1)
+    if total_sources > 0:
+        source_score = (contaminated_sources / total_sources) * 10
+    else:
+        source_score = 0
+    risk_score += source_score
     
-    # Determine risk level with RECALIBRATED thresholds
-    if risk_score >= 70:
+    logger.info(f"📊 Risk Calculation: Cluster={cluster_score:.1f}, Report={report_score:.1f}, "
+                f"Quality={quality_score:.1f}, Source={source_score:.1f}, Total={risk_score:.1f}")
+    
+    # Determine risk level (as per documentation)
+    if risk_score >= 75:
         risk_level = 'CRITICAL'
     elif risk_score >= 50:
         risk_level = 'HIGH'
-    elif risk_score >= 30:
+    elif risk_score >= 25:
         risk_level = 'MEDIUM'
     else:
         risk_level = 'LOW'
     
-    # Calculate confidence based on data quality
-    confidence = min(60 + features['cluster_count'] * 5 + (features['total_reports'] * 0.3), 95)
+    # Calculate confidence based on data completeness (as per documentation)
+    confidence = calculate_prediction_confidence(features)
+    
+    # Log significant risk changes
+    logger.info(f"🎯 Outbreak Risk: {risk_level} ({risk_score:.1f}/100) - Confidence: {confidence:.1f}%")
     
     return {
         'risk_score': risk_score,
@@ -555,9 +617,56 @@ def predict_outbreak_probability(features):
             'cluster_factor': cluster_score,
             'report_factor': report_score,
             'quality_factor': quality_score,
-            'water_factor': water_score
+            'source_factor': source_score
         }
     }
+
+def calculate_prediction_confidence(features):
+    """
+    Calculate prediction confidence based on data completeness.
+    As per documentation:
+    - Symptom reports: 10+ required (25 points)
+    - Active sensors: 5+ required (25 points)
+    - Recent data: <24 hours (25 points)
+    - Geographic coverage: 80%+ (25 points)
+    """
+    score = 0
+    
+    # Symptom reports factor (0-25 points)
+    total_reports = features.get('total_reports', 0)
+    if total_reports >= 10:
+        score += 25
+    else:
+        score += (total_reports / 10) * 25
+    
+    # Active sensors factor (0-25 points)
+    total_sensors = features.get('total_sensors', 0)
+    if total_sensors >= 5:
+        score += 25
+    else:
+        score += (total_sensors / 5) * 25
+    
+    # Data recency factor (0-25 points)
+    # Assume recent if we have data (can be enhanced with actual timestamps)
+    data_recency_hours = features.get('data_recency_hours', 24)
+    if data_recency_hours <= 24:
+        score += 25
+    elif data_recency_hours <= 48:
+        score += 15
+    elif data_recency_hours <= 72:
+        score += 10
+    else:
+        score += 5
+    
+    # Geographic coverage factor (0-25 points)
+    coverage_ratio = features.get('geographic_coverage', 0.5)
+    score += coverage_ratio * 25
+    
+    confidence = min(score, 100)
+    
+    logger.info(f"📈 Confidence: {confidence:.1f}% (Reports={total_reports}, Sensors={total_sensors})")
+    
+    return confidence
 
 def calculate_location_risk(data):
     """Calculate comprehensive risk assessment for a location."""

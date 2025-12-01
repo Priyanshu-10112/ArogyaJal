@@ -123,4 +123,22 @@ public class LocationService {
             throw new RuntimeException("Failed to fetch devices", e);
         }
     }
+    
+    /**
+     * Get all device IDs across all regions
+     */
+    public List<String> getAllDeviceIds() {
+        try {
+            List<DeviceRegistry> allDevices = deviceRegistryRepository.findAll();
+            return allDevices.stream()
+                .map(DeviceRegistry::getDeviceId)
+                .filter(deviceId -> deviceId != null && !deviceId.trim().isEmpty())
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Error fetching all device IDs: {}", e.getMessage(), e);
+            return List.of(); // Return empty list on error
+        }
+    }
 }

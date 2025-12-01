@@ -87,4 +87,18 @@ public class AlertRepository extends BaseFirestoreRepository<Alert> {
                 .get();
         return getEntities(future);
     }
+
+
+    /**
+     * Find alerts triggered between two timestamps
+     */
+    public List<Alert> findByTriggeredAtBetween(com.google.cloud.Timestamp startTime, com.google.cloud.Timestamp endTime) 
+            throws ExecutionException, InterruptedException {
+        ApiFuture<QuerySnapshot> future = db.collection(COLLECTION_NAME)
+                .whereGreaterThanOrEqualTo("triggeredAt", startTime)
+                .whereLessThanOrEqualTo("triggeredAt", endTime)
+                .orderBy("triggeredAt", Query.Direction.DESCENDING)
+                .get();
+        return getEntities(future);
+    }
 }

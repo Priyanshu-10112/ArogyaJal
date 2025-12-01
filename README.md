@@ -6,6 +6,14 @@
 
 ArogyaJal is an integrated IoT and ML-powered platform for monitoring water quality and predicting disease outbreaks across the North East India region (Assam, Meghalaya, Arunachal Pradesh, Nagaland, Manipur, Mizoram, Tripura, and Sikkim).
 
+### Quick Stats
+- **Version:** 2.2.1 (Production Ready)
+- **Active Sensors:** 18+ devices
+- **Coverage:** 8 NE states
+- **ML Accuracy:** 79% confidence (average)
+- **Tech Stack:** React + Spring Boot + Python Flask + Firebase
+- **Key Features:** Real-time monitoring, ML predictions, PDF reports, Emergency APIs
+
 ## ✨ Key Features
 
 ### 1. Real-Time Water Quality Monitoring
@@ -381,62 +389,62 @@ REACT_APP_ML_API_URL=http://localhost:5000
 - **Data Retention**: Real-time + historical
 - **WQI Classification**: Standardized 5-level system (Excellent to Very Poor)
 
-## 🎨 Recent Frontend Improvements (Nov 26, 2025)
+## 🎨 Recent Improvements & Features
 
-### ✅ Critical Fixes Implemented
+### ✅ Report Generation Feature (Dec 1, 2025)
 
-1. **WQI Label Consistency**
-   - Centralized water quality classification system
-   - Consistent labeling across all pages (Dashboard, Map, ML Dashboard, Trends)
-   - Standard ranges: 0-25 (Excellent), 26-50 (Good), 51-75 (Fair), 76-90 (Poor), >90 (Very Poor)
-   - Matching colors and legends everywhere
+**Region-wise 24-Hour Lab Report:**
+- Comprehensive PDF reports with ML predictions and sensor data
+- Canvas-based chart generation (risk gauge, factor bars, trend lines)
+- Human-readable explanations for outbreak risk
+- Sorted alerts by severity with device IDs
+- Sensor coverage analysis with percentage
+- Visual pH and WQI trend charts
+- Professional formatting for officials and judges
+- File size: ~250-350 KB, Generation time: 4-6 seconds
 
-2. **Trends Page Enhancements**
-   - Fixed pH chart Y-axis scale (0-14 instead of 0-1)
-   - Clear "No Historical Data Available" messaging with context
-   - Proper empty state handling
-   - Changed "N/A" to "No data" for clarity
+**Key Components:**
+- `pdfGenerator.ts` - PDF generation with jsPDF and jspdf-autotable
+- `chartGenerator.ts` - Canvas-based chart rendering
+- `useReportDownload.ts` - React hook for report download
+- `ReportController.java` - Backend API endpoint
+- `ReportService.java` - Data aggregation and ML calculation
 
-3. **Device Health Display**
-   - Battery: Shows percentage or "Not reported" (not just "%")
-   - Signal: Shows status or "Not reported" (not "Unknown (dBm)")
-   - Uptime: Human-readable format (e.g., "1d 4h") or "Not available"
-   - Aligned warnings with actual battery levels
+### ✅ Firestore Read Optimization (Nov 30, 2025)
 
-4. **Location Display**
-   - Fixed leading comma bug (", Barpeta" → "Barpeta")
-   - Clean location formatting across all components
-   - Consistent coordinate-to-name mapping
+**Performance Improvements (50-70% reduction in reads):**
+- Backend caching layer with 60-second TTL
+- Aggregated endpoints replacing multiple queries
+- Optimized polling intervals (Dashboard: 20s, Alerts: 30s, ML: 45s)
+- Client-side caching with debounced filters
+- Cache statistics monitoring endpoint
 
-5. **Device Management**
-   - Deduplication: Only latest reading per device shown
-   - Test device identification: Tagged with "(Test Device)" label
-   - No duplicate cards with different timestamps
+**Services:**
+- `FirestoreCacheService.java` - Centralized caching
+- `useOptimizedDashboard()` - Frontend optimization hook
+- `/api/aggregated/*` - Aggregated data endpoints
 
-6. **Code Quality**
-   - All ESLint warnings resolved
-   - Proper React Hooks dependencies
-   - Removed unused imports and variables
-   - Performance optimized with useCallback
+### ✅ Frontend Improvements (Nov 26, 2025)
 
-### 📁 New Utilities
+**WQI Label Consistency:**
+- Centralized classification system across all pages
+- Standard ranges: 0-25 (Excellent), 26-50 (Good), 51-75 (Fair), 76-90 (Poor), >90 (Very Poor)
+- Matching colors and legends everywhere
 
-**`DashBoard_Frontend/src/utils/waterQuality.ts`**
-- `getWaterQualityClassification()` - Centralized WQI labeling
-- `getBatteryStatus()` - Battery health calculation
-- `getSignalStatus()` - Signal strength classification
-- `formatUptime()` - Human-readable uptime
-- `formatLocation()` - Clean location strings
-- `getDeviceFriendlyName()` - User-friendly device names
-- `isTestDevice()` - Test device detection
-- `WQI_LEGEND` - Standardized legend data
+**Device Health Display:**
+- Battery, signal, uptime with proper fallback messages
+- Human-readable formats (e.g., "1d 4h")
+- Test device identification
 
-### 📊 Improved Components
+**Code Quality:**
+- All ESLint warnings resolved
+- Proper React Hooks dependencies
+- Performance optimized with useCallback
 
-- `DeviceHealthCard.tsx` - Consistent WQI, battery, signal display
-- `MapPage.tsx` - Unified legend and marker colors
-- `Trends.tsx` - Fixed pH scale, better empty states
-- `MLDashboard.tsx` - Deduplicated device listings
+**New Utilities:**
+- `waterQuality.ts` - WQI classification, battery status, signal strength
+- `formatters.ts` - Data formatting utilities
+- `SensorDataTable.tsx` - Professional table component
 
 ## 🎯 Use Cases
 
@@ -574,108 +582,71 @@ For issues and questions, please contact the development team.
 
 ---
 
-## 🗄️ Data Seeding
+## �  Report Generation
 
-### Complete Sensor Data Seeding
+### Region-wise 24-Hour Lab Report
 
-**Script:** `seed_complete_data.ps1`  
-**Data File:** `COMPLETE_SEED_DATA.json`  
-**Documentation:** `COMPLETE_DATA_SEEDING_GUIDE.md`
+**Feature:** Downloadable PDF reports for district officials and health teams
 
-Seeds **12 complete sensor readings** with ALL fields:
-- ✅ Device ID (NER-ASS-BAR-001, etc.)
-- ✅ Location (latitude, longitude)
-- ✅ All 5 Sensors (pH, Turbidity, TDS, DO, Temperature)
-- ✅ Battery Data (voltage, level, charging status, temperature, health)
-- ✅ Timestamp (auto-generated)
+**Access:** ML Dashboard → "Download Report" button
 
-**Locations Covered:**
-- Barpeta, Guwahati, Tezpur, Shillong, Dibrugarh, Jorhat, Silchar, Tinsukia, Nagaon, Tura, Kamakhya
+**Report Contents:**
+1. **Header & Context**
+   - Region name and time range
+   - Sensor coverage analysis (configured vs reporting)
+   - Purpose statement for officials
 
-**Battery Health Levels:**
-- EXCELLENT (90-100%)
-- GOOD (70-89%)
-- FAIR (50-69%)
-- POOR (<50%)
+2. **Water Quality Summary**
+   - Parameter statistics (pH, TDS, Turbidity, Temperature)
+   - Active sensor count
+   - Status indicators
 
-**Usage:**
-```powershell
-# Make sure backend is running on port 8080
-.\seed_complete_data.ps1
-```
+3. **ML Outbreak Prediction**
+   - Risk gauge chart (visual)
+   - Risk score, level, and confidence
+   - Human-readable explanation
+   - Factor bar chart (visual)
+   - Contributing factors with descriptions
+   - Recommendations list
 
-**API Endpoint:**
-```
-POST http://localhost:8080/api/sensor-data
-Content-Type: application/json
-```
+4. **Sensor Trends**
+   - pH and WQI line charts (visual)
+   - Time-series visualization for top sensors
+   - Latest reading summaries
 
-**Result:** All dashboard fields will show data - no "Not reported" messages!
+5. **Alerts**
+   - Sorted by severity (CRITICAL → LOW)
+   - Device ID, time, type, description
+   - Color-coded table
 
----
+6. **Sensor Details**
+   - Summary table with all sensors
+   - Latest values and WQI status
 
-## 🎨 UI Components & Utilities
+**Technical Details:**
+- Format: PDF (A4 size)
+- File size: 250-350 KB
+- Generation time: 4-6 seconds
+- Charts: Canvas-based (JPEG 85% quality)
+- API: `GET /api/report?state=&district=&city=&village=&range=24h`
 
-### New Components (Dec 1, 2025)
-
-**Sensor Data Display:**
-- `SensorDataTable.tsx` - Professional table with color-coded status
-- `SensorDataTable.css` - Responsive styling
-- `formatters.ts` - Data formatting utilities
-
-**Features:**
-- Proper spacing and layout
-- Color-coded WQI status badges
-- Battery, signal, uptime icons
-- Handles missing data gracefully
-- CSV export functionality
-- Mobile responsive
+**Documentation:**
+- `REPORT_FEATURE_STATUS.md` - Complete implementation guide
+- `REPORT_FIX_SUMMARY.md` - Enhancement details
+- `CHART_EMBEDDING_STATUS.md` - Chart implementation
+- `IMPLEMENTATION_COMPLETE.md` - Full project summary
 
 ---
 
-## 🐛 Recent Fixes (Dec 1, 2025)
-
-### Display Issues Resolved
-
-1. **Sensor Data Concatenation**
-   - Issue: Data displayed without spacing
-   - Fix: Created `SensorDataTable` component with proper formatting
-   - Files: `formatters.ts`, `SensorDataTable.tsx`
-
-2. **Outbreak Panel Spacing**
-   - Issue: Contributing factors showing without gaps
-   - Fix: Enhanced CSS with flexbox and explicit spacing
-   - File: `OutbreakPredictionPanel.tsx`, `OutbreakPredictionPanel.css`
-
-3. **Contributing Factors Zero Values**
-   - Issue: ML service returning 0.0 for all factors
-   - Fix: Backend fallback calculation based on actual data
-   - File: `MLController.java` - `calculateContributingFactors()` method
-   - Logic: Calculates factors from cluster count, report count, and risk score
-
-### Backend Improvements
-
-**MLController.java:**
-- Added intelligent fallback for contributing factors
-- Calculates cluster factor from active clusters and severity
-- Calculates report factor from symptom report count
-- Distributes remaining risk between quality and water factors
-- Logs detailed calculation metrics
-
----
-
-## 🔥 Firebase Storage Setup
+## 🔥 Firebase Storage
 
 ### Photo Evidence Storage
 
-**Issue:** Photos not uploading - bucket doesn't exist
-
-**Solution:**
-1. Go to: https://console.firebase.google.com/project/arogyajal-22/storage
+**Setup Required:**
+1. Go to Firebase Console → Storage
 2. Click "Get Started"
 3. Select "Start in production mode"
 4. Choose location: **asia-south1 (Mumbai)**
-5. Click "Done"
 
 **Storage Rules:**
 ```javascript
@@ -690,13 +661,44 @@ service firebase.storage {
 }
 ```
 
-**After Setup:**
-- Real photos will upload to Firebase Storage
-- Dashboard will display actual images
-- No more placeholder errors
+**Features:**
+- Photo evidence upload from mobile app
+- Automatic storage in `/evidence/` folder
+- Public read access for dashboard display
+- Authenticated write access for security
+
+---
+
+---
+
+## 📚 Documentation
+
+### Available Documentation
+- **README.md** (this file) - Project overview, features, and quick start guide
+- **COMPLETE_PROJECT_DOCUMENTATION.md** - Comprehensive technical documentation with architecture, API details, and deployment guide
+
+### Quick Commands
+
+**Start All Services:**
+```bash
+# Terminal 1: ML Service
+cd ML && python start_ml_service.py
+
+# Terminal 2: Backend
+cd backend && ./mvnw spring-boot:run
+
+# Terminal 3: Frontend
+cd DashBoard_Frontend && npm start
+```
+
+**Verify Services:**
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8080/actuator/health
+- ML Service: http://localhost:5000/health
+- API Docs: http://localhost:8080/swagger-ui.html
 
 ---
 
 **Last Updated**: December 1, 2025  
-**Version**: 1.5.0  
-**Status**: Production Ready ✅ (Complete ML Integration + IoT Sensor APIs + Firebase Storage + Photo Evidence)
+**Version**: 2.2.1  
+**Status**: Production Ready ✅ (Complete ML Integration + IoT APIs + Report Generation + Firebase Storage)

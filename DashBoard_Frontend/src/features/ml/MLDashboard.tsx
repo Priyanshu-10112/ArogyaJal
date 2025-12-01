@@ -4,6 +4,7 @@ import { getAllowedDeviceIds } from '../../utils/locationMapper';
 import OutbreakPredictionPanel from '../../components/ML/OutbreakPredictionPanel';
 import ClusterMap from '../../components/ML/ClusterMap';
 import DeviceHealthCard from '../../components/ML/DeviceHealthCard';
+import { useReportDownload } from '../../hooks/useReportDownload';
 import './MLDashboard.css';
 
 interface SensorReading {
@@ -29,6 +30,7 @@ interface DashboardStats {
 
 const MLDashboard: React.FC = () => {
   const { filter } = useGlobalFilter();
+  const { downloadReport, isGenerating, error, clearError } = useReportDownload();
   const [sensors, setSensors] = useState<SensorReading[]>([]);
   const [mlServiceOnline, setMlServiceOnline] = useState<boolean>(false);
   const [stats, setStats] = useState<DashboardStats>({
@@ -39,6 +41,15 @@ const MLDashboard: React.FC = () => {
     activeAlerts: 0
   });
   const [loading, setLoading] = useState(true);
+
+  const handleDownloadReport = async () => {
+    await downloadReport({
+      state: filter.state || undefined,
+      district: filter.district || undefined,
+      city: filter.city || undefined,
+      village: filter.village || undefined
+    });
+  };
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -180,11 +191,83 @@ const MLDashboard: React.FC = () => {
     <div className="ml-dashboard">
       {/* Header */}
       <div className="dashboard-header">
-        <h1>ArogyaJal ML Dashboard - North East India</h1>
-        <p>Real-time Water Quality & Outbreak Monitoring for NER States</p>
-        <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '5px' }}>
-          🗺️ Covering: Assam • Meghalaya • Arunachal Pradesh • Nagaland • Manipur • Mizoram • Tripura • Sikkim
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <h1>ArogyaJal ML Dashboard - North East India</h1>
+            <p>Real-time Water Quality & Outbreak Monitoring for NER States</p>
+            <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '5px' }}>
+              🗺️ Covering: Assam • Meghalaya • Arunachal Pradesh • Nagaland • Manipur • Mizoram • Tripura • Sikkim
+            </p>
+          </div>
+          <button
+            onClick={handleDownloadReport}
+            disabled={isGenerating}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: isGenerating ? '#9ca3af' : '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: isGenerating ? 'not-allowed' : 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              if (!isGenerating) {
+                e.currentTarget.style.backgroundColor = '#2563eb';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isGenerating) {
+                e.currentTarget.style.backgroundColor = '#3b82f6';
+              }
+            }}
+          >
+            {isGenerating ? (
+              <>
+                <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
+                Generating PDF with charts… please wait
+              </>
+            ) : (
+              <>
+                📄 Download Report
+              </>
+            )}
+          </button>
+        </div>
+        {error && (
+          <div style={{
+            marginTop: '10px',
+            padding: '10px 15px',
+            backgroundColor: '#fee2e2',
+            border: '1px solid #fecaca',
+            borderRadius: '6px',
+            color: '#991b1b',
+            fontSize: '14px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span>⚠️ {error}</span>
+            <button
+              onClick={clearError}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#991b1b',
+                cursor: 'pointer',
+                fontSize: '18px',
+                padding: '0 5px'
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}

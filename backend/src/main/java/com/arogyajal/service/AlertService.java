@@ -797,4 +797,15 @@ public class AlertService {
         log.info("Bulk acknowledge complete: {}/{} successful", successCount, alertIds.size());
         return successCount;
     }
+   /**
+     * Get alerts within a time range
+     */
+    public List<Alert> getAlertsByTimeRange(com.google.cloud.Timestamp startTime, com.google.cloud.Timestamp endTime) {
+        try {
+            return alertRepository.findByTriggeredAtBetween(startTime, endTime);
+        } catch (Exception e) {
+            log.error("Error fetching alerts by time range", e);
+            return new ArrayList<>();
+        }
+    }
 }

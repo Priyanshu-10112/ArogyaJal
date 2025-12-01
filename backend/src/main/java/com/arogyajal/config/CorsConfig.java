@@ -14,11 +14,9 @@ public class CorsConfig {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         CorsConfiguration config = new CorsConfiguration();
         
-        // Allow specific origins, headers, and methods
-        config.setAllowCredentials(true);
-        // For development - replace with your frontend URL in production
-        config.addAllowedOriginPattern("http://localhost:3000");
-        config.addAllowedOriginPattern("http://localhost:8081");
+        // Allow all origins for mobile app (credentials disabled for simplicity)
+        config.setAllowCredentials(false);
+        config.addAllowedOrigin("*"); // Allow all origins
         
         // Allow all headers and methods
         config.addAllowedHeader("*");

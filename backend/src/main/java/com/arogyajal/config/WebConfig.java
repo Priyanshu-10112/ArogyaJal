@@ -11,16 +11,10 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-                .allowedOrigins(
-                    "http://localhost:3000",
-                    "http://localhost:8080",
-                    "http://localhost:8081",
-                    "http://203.81.243.218:8080",
-                    "https://5d2ba242b144.ngrok-free.app"
-                )
+                .allowedOriginPatterns("*") // Allow all origins for mobile app
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                .allowCredentials(true)
+                .allowCredentials(false) // Disabled for mobile app compatibility
                 .maxAge(3600);
     }
 

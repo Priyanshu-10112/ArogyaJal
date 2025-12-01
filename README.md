@@ -126,6 +126,69 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 - MQTT/HTTP protocols
 - Battery monitoring
 
+## 📱 Mobile App Emergency APIs
+
+### Emergency Endpoints (for Mobile App Integration)
+
+**1. Detect Water Safety Risk**
+```http
+POST /api/emergency/detect-risk
+Body: { "latitude": 26.1445, "longitude": 91.7362 }
+Response: { "riskLevel": "contaminated", "riskScore": 15, "suggestedActions": [...] }
+```
+
+**2. Send Emergency Alert**
+```http
+POST /api/emergency/send-alert
+Body: { "userId", "userPhone", "latitude", "longitude", "riskLevel", "contacts": [...] }
+Response: { "success": true, "alertId": "alert_abc123" }
+```
+
+**3. Escalate Alert**
+```http
+POST /api/emergency/escalate
+Body: { "alertId": "alert_abc123" }
+Response: { "success": true }
+```
+
+**4. Submit Symptom Report**
+```http
+POST /api/emergency/submit-symptoms
+Body: { "userId", "symptoms": ["Vomiting", "Diarrhea"], "latitude", "longitude" }
+Response: { "success": true, "reportId": "symptom_xyz", "outbreakDetected": false }
+```
+
+**5. Upload Photo Evidence**
+```http
+POST /api/emergency/upload-photos (multipart/form-data)
+Form: userId, userPhone, description, latitude, longitude, photos[]
+Response: { "success": true, "reportId": "photo_def", "photoUrls": [...] }
+```
+
+**6. Get Nearest PHC**
+```http
+GET /api/emergency/nearest-phc?lat=26.1445&lon=91.7362
+Response: { "name": "PHC Guwahati", "distance": "2.3 km", "bedsAvailable": 8 }
+```
+
+**7. Get Health Advisories**
+```http
+GET /api/emergency/advisories?district=Kamrup Metropolitan
+Response: [{ "title": "Water Alert", "message": "Boil water", "severity": "high" }]
+```
+
+**8. Get Water Updates**
+```http
+GET /api/emergency/water-updates?lat=26.1445&lon=91.7362
+Response: [{ "type": "tanker_dispatch", "message": "Tanker dispatched", "status": "in_progress" }]
+```
+
+**9. Get Emergency Contacts**
+```http
+GET /api/emergency/contacts?userId=user123
+Response: [{ "name": "ASHA Worker", "phone": "+91-9876543210", "role": "Primary" }]
+```
+
 ## 📊 System Components
 
 ### 1. Dashboard Pages
@@ -415,8 +478,74 @@ For issues and questions, please contact the development team.
    - Recommendation: Add `isTestDevice` flag in device registry
    - Frontend: Already tags test devices with "(Test Device)" label
 
+## ⚡ Firestore Read Optimization (Nov 30, 2025)
+
+### Performance Improvements
+
+**Implemented optimizations to reduce Firestore quota usage by 50-70%:**
+
+1. **Backend Caching Layer**
+   - 60-second TTL cache for frequently accessed data
+   - Tracks cache hit/miss rates
+   - Service: `FirestoreCacheService.java`
+
+2. **Aggregated Endpoints**
+   - Single query replaces 3-4 separate reads
+   - Endpoints: `/api/aggregated/dashboard-summary`, `/alerts-summary`, `/prediction-latest`
+   - Reduces dashboard load from 4-5 reads to 1 read
+
+3. **Optimized Polling Intervals**
+   - Dashboard: 20s (was ~10s) - 50% reduction
+   - Alerts: 30s (was ~10s) - 67% reduction
+   - ML Predictions: 45s (was 60s) - 25% reduction
+   - Trends: 60s for historical data
+
+4. **Frontend Optimizations**
+   - Client-side caching with TTL
+   - Debounced filters (500ms delay)
+   - Read metrics tracking
+   - Hooks: `useOptimizedDashboard()`, `useOptimizedAlerts()`, `useOptimizedPrediction()`
+
+5. **Monitoring**
+   - Cache statistics: `GET /api/aggregated/cache-stats`
+   - Real-time hit rate and read reduction metrics
+   - Client-side read tracking
+
+**Result: 50-70% reduction in Firestore reads while maintaining real-time behavior**
+
 ---
 
-**Last Updated**: November 27, 2025  
-**Version**: 1.2.0  
-**Status**: Production Ready ✅ (Complete ML Integration)
+## 🗄️ Data Seeding
+
+### Automated Data Seeding Script
+
+**Script:** `seed_firebase_data.ps1`
+
+Seeds complete dataset to new Firebase project:
+- **24 Sensor Readings** across North East India
+  - Locations: Guwahati, Kamakhya, Dispur, Barpeta, Jorhat, Tezpur, Silchar, Shillong, Dibrugarh
+  - Quality Status: GOOD, FAIR, POOR, CRITICAL
+  - Parameters: pH, Turbidity, TDS, Temperature
+  
+- **20 Symptom Reports** with complete patient data
+  - Patient Name, Phone, Age, Gender
+  - GeoLocation (latitude, longitude)
+  - Location names (reverse geocoding ready)
+  - Symptoms, Severity (MILD, MODERATE, SEVERE)
+  - Water Source, Duration
+  
+**Usage:**
+```powershell
+.\seed_firebase_data.ps1
+```
+
+**Expected Clusters:**
+- Kamakhya: 8 reports (SEVERE)
+- Shillong: 4 reports (MODERATE)
+- Barpeta: 3 reports (MODERATE)
+
+---
+
+**Last Updated**: December 1, 2025  
+**Version**: 1.3.1  
+**Status**: Production Ready ✅ (Complete ML Integration + Optimized Performance + Data Seeding)

@@ -35,6 +35,9 @@ public class FirebaseConfig {
     @Value("${firebase.database-url:}")
     private String databaseUrl;
     
+    @Value("${firebase.storage-bucket:arogyajal-22.appspot.com}")
+    private String storageBucket;
+    
     @PostConstruct
     public void initializeFirebase() {
         if (!firebaseEnabled) {
@@ -101,6 +104,12 @@ public class FirebaseConfig {
         // Set database URL
         if (databaseUrl != null && !databaseUrl.isEmpty()) {
             builder.setDatabaseUrl(databaseUrl);
+        }
+        
+        // Set storage bucket
+        if (storageBucket != null && !storageBucket.isEmpty()) {
+            builder.setStorageBucket(storageBucket);
+            log.info("Firebase Storage bucket configured: {}", storageBucket);
         }
         
         // Set credentials

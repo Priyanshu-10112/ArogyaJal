@@ -46,11 +46,11 @@ public class MLSyncScheduler {
     }
     
     /**
-     * Sync with ML service every 45 seconds (optimized from 60s)
+     * Sync with ML service every 5 minutes (300 seconds)
      * Fetches sensor + symptom data, sends to ML, stores prediction
-     * OPTIMIZATION: Reduced frequency to save Firestore reads
+     * OPTIMIZATION: Reduced frequency to save Firestore reads (was 45s)
      */
-    @Scheduled(fixedRate = 45000, initialDelay = 10000) // 45 seconds (was 60s), 10s initial delay
+    @Scheduled(fixedRate = 300000, initialDelay = 10000) // 5 minutes (300 seconds), 10s initial delay
     public void syncWithMLService() {
         if (!syncEnabled) {
             logger.debug("ML sync disabled via configuration");

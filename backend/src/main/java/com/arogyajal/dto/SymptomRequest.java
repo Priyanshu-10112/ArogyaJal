@@ -1,5 +1,9 @@
 package com.arogyajal.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.arogyajal.config.LocationDeserializer;
+import com.arogyajal.config.SeverityDeserializer;
 import com.google.cloud.firestore.GeoPoint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -17,13 +21,17 @@ public class SymptomRequest {
     @NotBlank(message = "User ID is required")
     private String userId;
     
-    @NotBlank(message = "Location is required")
+    // Location can be either string or geoLocation object
+    @JsonDeserialize(using = LocationDeserializer.class)
     private String location;
     
-    // GeoLocation (optional but recommended)
-    private Map<String, Double> geoLocation; // {latitude: 28.6139, longitude: 77.2090}
+    // GeoLocation (mobile app sends this as "location" object with lat/lng)
+    private Map<String, Double> geoLocation; // {lat: 28.6139, lng: 77.2090}
     
-    @NotBlank(message = "Water source is required")
+    // Latitude and longitude (extracted from location object if sent)
+    private Double latitude;
+    private Double longitude;
+    
     private String waterSource;
     
     // Reporter information (optional)
@@ -39,8 +47,8 @@ public class SymptomRequest {
     @NotEmpty(message = "At least one symptom must be reported")
     private List<String> symptoms;
     
-    @NotBlank(message = "Severity is required")
-    @Pattern(regexp = "MILD|MODERATE|SEVERE", message = "Severity must be MILD, MODERATE, or SEVERE")
+    // Severity can be either string (MILD/MODERATE/SEVERE) or number (0/1/2)
+    @JsonDeserialize(using = SeverityDeserializer.class)
     private String severity;
     
     @Pattern(regexp = "HOURS|DAYS|WEEKS", message = "Duration must be HOURS, DAYS, or WEEKS")

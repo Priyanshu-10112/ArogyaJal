@@ -226,6 +226,7 @@ public class WaterQualityService {
         // Battery status (SEPARATE from water quality)
         DeviceHealth deviceHealth = new DeviceHealth();
         Double batteryVoltage = reading.getBatteryVoltage();
+        Double batteryLevel = reading.getBatteryLevel();
         
         // Extract battery voltage from notes if not in dedicated field
         if (batteryVoltage == null || batteryVoltage == 0) {
@@ -242,6 +243,7 @@ public class WaterQualityService {
         }
         
         deviceHealth.setBatteryVoltage(batteryVoltage);
+        deviceHealth.setBatteryLevel(batteryLevel);  // Both are Double now
         deviceHealth.setBatteryStatus(evaluateBatteryStatus(batteryVoltage));
         
         log.info("Final water quality assessment - Status: {}, Battery: {}", 

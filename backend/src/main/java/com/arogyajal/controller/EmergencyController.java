@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -281,4 +282,34 @@ public class EmergencyController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(List.of());
         }
     }
-}
+
+
+    
+    /**
+     * Get active emergency alerts
+     * GET /api/emergency/alerts/active
+     */
+    @GetMapping("/alerts/active")
+    @Operation(summary = "Get active alerts", 
+              description = "Get all active emergency alerts")
+    public ResponseEntity<Map<String, Object>> getActiveAlerts() {
+        
+        log.info("Getting active emergency alerts");
+        
+        try {
+            List<Map<String, Object>> alerts = emergencyService.getActiveAlerts();
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("alerts", alerts);
+            response.put("count", alerts.size());
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Error getting active alerts", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("alerts", List.of(), "count", 0));
+        }
+    }
+    }
+    

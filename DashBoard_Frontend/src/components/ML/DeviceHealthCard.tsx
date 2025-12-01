@@ -3,7 +3,6 @@ import './DeviceHealthCard.css';
 import {
   getWaterQualityClassification,
   getBatteryStatus,
-  getSignalStatus,
   formatUptime,
   formatLocation,
   isTestDevice
@@ -35,7 +34,6 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
   // Use centralized utility functions
   const wqiClassification = getWaterQualityClassification(wqi);
   const batteryInfo = getBatteryStatus(batteryLevel, batteryVoltage);
-  const signalInfo = getSignalStatus(signalStrength);
   const uptimeDisplay = formatUptime(uptime, lastUpdated);
   const locationDisplay = formatLocation(location);
   const isTest = isTestDevice(sensorId);
@@ -46,8 +44,6 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
     if (percentage >= 30) return '🔋';
     return '🪫';
   };
-
-  const getSignalIcon = () => '📶';
 
   return (
     <div className="device-health-card">
@@ -104,18 +100,6 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
           )}
         </div>
 
-        {/* Signal */}
-        <div className="status-item">
-          <div className="status-icon">{getSignalIcon()}</div>
-          <div className="status-info">
-            <div className="status-label">Signal</div>
-            <div className="status-value" style={{ color: signalInfo.color }}>
-              {signalInfo.label}
-              {signalInfo.strength !== null && <span className="sub-value"> ({signalInfo.strength} dBm)</span>}
-            </div>
-          </div>
-        </div>
-
         {/* Uptime */}
         <div className="status-item">
           <div className="status-icon">⏱️</div>
@@ -130,11 +114,6 @@ const DeviceHealthCard: React.FC<DeviceHealthProps> = ({
       {batteryInfo.warning && (
         <div className="device-alert warning">
           ⚠️ {batteryInfo.warning}
-        </div>
-      )}
-      {signalInfo.strength !== null && signalInfo.strength < -80 && (
-        <div className="device-alert warning">
-          ⚠️ Weak signal - check connectivity
         </div>
       )}
       {wqi !== undefined && wqi !== null && wqi > 75 && (

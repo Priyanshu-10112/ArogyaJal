@@ -91,6 +91,24 @@ public class SymptomController {
         }
     }
     
+    @PostMapping("/api/symptoms/report")
+    @Operation(summary = "Create symptom report (mobile app v2)", description = "Submit symptom report - mobile app endpoint")
+    public ResponseEntity<SymptomReport> createSymptomReportMobileV2(@Valid @RequestBody SymptomRequest request) {
+        log.info("Creating symptom report for user: {} (mobile v2 endpoint)", request.getUserId());
+        
+        try {
+            SymptomReport report = symptomService.saveSymptomReport(request);
+            
+            // TODO: Check for symptom cluster alerts after saving the report
+            // alertService.checkForSymptomClusterAlerts(request.getLocation());
+            
+            return ResponseEntity.status(HttpStatus.CREATED).body(report);
+        } catch (Exception e) {
+            log.error("Error creating symptom report", e);
+            throw e;
+        }
+    }
+    
     @PostMapping("/api/symptoms/reports")
     @Operation(summary = "Create a new symptom report", description = "Submit a new symptom report")
     public ResponseEntity<SymptomReport> createSymptomReport(@Valid @RequestBody SymptomRequest request) {

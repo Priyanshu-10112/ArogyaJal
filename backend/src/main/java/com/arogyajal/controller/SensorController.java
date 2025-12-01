@@ -134,7 +134,6 @@ public class SensorController {
                         sensorData.getSensors().getPH() != null ? sensorData.getSensors().getPH() : "N/A",
                         sensorData.getSensors().getTemperature_C() != null ? sensorData.getSensors().getTemperature_C() : "N/A",
                         sensorData.getSensors().getTDS_ppm() != null ? sensorData.getSensors().getTDS_ppm() : "N/A",
-                        sensorData.getSensors().getDO_mgL() != null ? sensorData.getSensors().getDO_mgL() : "N/A",
                         sensorData.getSensors().getTurbidity_NTU() != null ? sensorData.getSensors().getTurbidity_NTU() : "N/A");
             }
             

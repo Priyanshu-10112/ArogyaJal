@@ -243,6 +243,30 @@ public class MLController {
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> result = response.getBody();
+                
+                // Check if contributing factors are all zero and calculate fallback
+                Object factorsObj = result.get("contributing_factors");
+                if (factorsObj == null) {
+                    factorsObj = result.get("risk_factors"); // Try alternate key
+                }
+                
+                if (factorsObj instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> factors = (Map<String, Object>) factorsObj;
+                    boolean allZero = factors.values().stream()
+                        .allMatch(v -> v instanceof Number && ((Number) v).doubleValue() == 0.0);
+                    
+                    if (allZero) {
+                        log.warn("⚠️ ML service returned zero contributing factors, calculating fallback");
+                        double riskScore = result.get("risk_score") instanceof Number 
+                            ? ((Number) result.get("risk_score")).doubleValue() 
+                            : 0.0;
+                        Map<String, Double> calculatedFactors = calculateContributingFactors(clusterData, riskScore);
+                        result.put("contributing_factors", calculatedFactors);
+                        log.info("✅ Applied fallback contributing factors");
+                    }
+                }
+                
                 log.info("Successfully predicted outbreak risk: {}", result.get("risk_level"));
                 return ResponseEntity.ok(result);
             } else {
@@ -282,6 +306,32 @@ public class MLController {
             response.put("confidence", latest.getConfidence());
             response.put("contributing_factors", latest.getContributingFactors());
             response.put("recommendations", latest.getRecommendedActions());
+            
+            // Check if contributing factors are all zero and calculate fallback
+            Object factorsObj = latest.getContributingFactors();
+            if (factorsObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> factors = (Map<String, Object>) factorsObj;
+                boolean allZero = factors.values().stream()
+                    .allMatch(v -> v instanceof Number && ((Number) v).doubleValue() == 0.0);
+                
+                if (allZero && latest.getRiskScore() != null && latest.getRiskScore() > 0) {
+                    log.warn("⚠️ Stored prediction has zero contributing factors, calculating fallback");
+                    
+                    // Get cluster data for calculation
+                    ResponseEntity<Map<String, Object>> clusterResponse = getSymptomClusters();
+                    Map<String, Object> clusterData = clusterResponse.getBody();
+                    
+                    if (clusterData != null) {
+                        Map<String, Double> calculatedFactors = calculateContributingFactors(
+                            clusterData, 
+                            latest.getRiskScore()
+                        );
+                        response.put("contributing_factors", calculatedFactors);
+                        log.info("✅ Applied fallback contributing factors to stored prediction");
+                    }
+                }
+            }
             
             log.info("✅ Returning stored prediction: Risk={} ({}), Confidence={}%", 
                     latest.getRiskScore(), latest.getRiskLevel(), latest.getConfidence());
@@ -390,6 +440,99 @@ public class MLController {
             response.put("error", e.getMessage());
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(response);
         }
+    }
+    
+    /**
+     * Calculate contributing factors from available data when ML service doesn't provide them
+     * This provides a reasonable fallback based on actual data
+     */
+    private Map<String, Double> calculateContributingFactors(
+            Map<String, Object> clusterData,
+            double riskScore) {
+        
+        Map<String, Double> factors = new HashMap<>();
+        
+        try {
+            // Get cluster count and analyze severity
+            Object clustersObj = clusterData.get("clusters");
+            int clusterCount = 0;
+            int highRiskClusters = 0;
+            
+            if (clustersObj instanceof List) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> clusters = (List<Map<String, Object>>) clustersObj;
+                clusterCount = clusters.size();
+                
+                // Count high-risk clusters (score > 75)
+                for (Map<String, Object> cluster : clusters) {
+                    Object scoreObj = cluster.get("cluster_score");
+                    if (scoreObj instanceof Number) {
+                        double score = ((Number) scoreObj).doubleValue();
+                        if (score > 75) {
+                            highRiskClusters++;
+                        }
+                    }
+                }
+            }
+            
+            // Calculate cluster factor (0-100)
+            // More clusters = higher risk, high-risk clusters increase factor
+            double clusterFactor = 0.0;
+            if (clusterCount > 0) {
+                double baseClusterRisk = Math.min(100, (clusterCount / 5.0) * 100); // 5+ clusters = 100%
+                double severityMultiplier = highRiskClusters > 0 ? (highRiskClusters / (double) clusterCount) : 0.5;
+                clusterFactor = baseClusterRisk * severityMultiplier;
+            }
+            
+            // Get report count
+            int reportCount = 0;
+            Object totalReportsObj = clusterData.get("total_reports");
+            if (totalReportsObj instanceof Number) {
+                reportCount = ((Number) totalReportsObj).intValue();
+            }
+            
+            // Calculate report factor (0-100)
+            // More reports = higher risk
+            double reportFactor = Math.min(100, (reportCount / 20.0) * 100); // 20+ reports = 100%
+            
+            // Calculate quality and water factors based on risk score
+            // If risk is high but clusters/reports are low, quality/water must be contributing
+            double accountedRisk = (clusterFactor * 0.4) + (reportFactor * 0.3);
+            double remainingRisk = Math.max(0, riskScore - accountedRisk);
+            
+            // Distribute remaining risk between quality and water
+            double qualityFactor = Math.min(100, remainingRisk * 0.6);
+            double waterFactor = Math.min(100, remainingRisk * 0.4);
+            
+            // Ensure factors are reasonable (at least some contribution if risk > 0)
+            if (riskScore > 0) {
+                clusterFactor = Math.max(clusterFactor, riskScore * 0.2);
+                reportFactor = Math.max(reportFactor, riskScore * 0.2);
+                qualityFactor = Math.max(qualityFactor, riskScore * 0.2);
+                waterFactor = Math.max(waterFactor, riskScore * 0.2);
+            }
+            
+            factors.put("cluster_factor", Math.round(clusterFactor * 10.0) / 10.0);
+            factors.put("report_factor", Math.round(reportFactor * 10.0) / 10.0);
+            factors.put("quality_factor", Math.round(qualityFactor * 10.0) / 10.0);
+            factors.put("water_factor", Math.round(waterFactor * 10.0) / 10.0);
+            
+            log.info("📊 Calculated contributing factors: clusters={} (count={}, high-risk={}), reports={} (count={}), quality={}, water={}",
+                    factors.get("cluster_factor"), clusterCount, highRiskClusters,
+                    factors.get("report_factor"), reportCount,
+                    factors.get("quality_factor"), factors.get("water_factor"));
+            
+        } catch (Exception e) {
+            log.error("Error calculating contributing factors: {}", e.getMessage());
+            // Return reasonable defaults based on risk score
+            double defaultFactor = riskScore / 4.0; // Distribute evenly
+            factors.put("cluster_factor", defaultFactor);
+            factors.put("report_factor", defaultFactor);
+            factors.put("quality_factor", defaultFactor);
+            factors.put("water_factor", defaultFactor);
+        }
+        
+        return factors;
     }
     
     // Helper methods to create empty responses

@@ -16,7 +16,7 @@ interface OutbreakPrediction {
 }
 
 const OutbreakPredictionPanel: React.FC = () => {
-  const { filter, getBreadcrumb } = useGlobalFilter();
+  const { getBreadcrumb } = useGlobalFilter();
   const [prediction, setPrediction] = useState<OutbreakPrediction | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -82,74 +82,94 @@ const OutbreakPredictionPanel: React.FC = () => {
   const hasFilter = breadcrumb.length > 0;
 
   return (
-    <div className="outbreak-panel">
-      <h2>Outbreak Risk Prediction</h2>
+    <div className="outbreak-panel" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <h2 className="outbreak-title" style={{ marginBottom: '16px', paddingBottom: '12px', borderBottom: '2px solid #e5e7eb' }}>
+        Outbreak Risk Prediction
+      </h2>
+      
       {hasFilter && (
-        <div style={{ 
-          fontSize: '12px', 
-          color: '#f59e0b', 
-          marginBottom: '10px',
-          padding: '8px',
-          background: '#fffbeb',
-          borderRadius: '4px',
-          border: '1px solid #fef3c7'
-        }}>
+        <div className="filter-warning" style={{ marginBottom: '12px' }}>
           ⚠️ Note: Risk prediction is region-wide (not filtered by location)
         </div>
       )}
       
       {/* Risk Meter */}
-      <div className="risk-meter">
-        <div className="risk-circle" style={{ borderColor: getRiskColor(prediction.riskLevel) }}>
-          <div className="risk-score">{prediction.riskScore.toFixed(1)}</div>
-          <div className="risk-label">{prediction.riskLevel}</div>
+      <div className="risk-meter" style={{ padding: '20px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+        <div className="risk-circle" style={{ 
+          borderColor: getRiskColor(prediction.riskLevel),
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }}>
+          <div className="risk-score" style={{ margin: 0 }}>{prediction.riskScore.toFixed(1)}</div>
+          <div className="risk-label" style={{ margin: 0 }}>{prediction.riskLevel}</div>
         </div>
-        <div className="confidence">
+        <div className="confidence" style={{ margin: 0 }}>
           Confidence: {prediction.confidence.toFixed(0)}%
         </div>
       </div>
 
       {/* Contributing Factors */}
-      <div className="factors">
-        <h3>Contributing Factors</h3>
-        <div className="factor-bars">
-          <div className="factor">
-            <span>Clusters</span>
+      <div className="factors" style={{ padding: '16px 0', borderTop: '1px solid #f3f4f6' }}>
+        <h3 className="factors-title" style={{ marginBottom: '16px', paddingBottom: '8px', borderBottom: '1px solid #e5e7eb' }}>
+          Contributing Factors
+        </h3>
+        <div className="factor-bars" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="factor" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: '12px', minHeight: '32px' }}>
+            <span className="factor-label">Clusters</span>
             <div className="bar">
-              <div className="fill" style={{ width: `${prediction.contributingFactors.cluster_factor}%` }}></div>
+              <div 
+                className="fill" 
+                style={{ width: `${prediction.contributingFactors.cluster_factor}%` }}
+              ></div>
             </div>
-            <span>{prediction.contributingFactors.cluster_factor.toFixed(1)}</span>
+            <span className="factor-value">{prediction.contributingFactors.cluster_factor.toFixed(1)}</span>
           </div>
-          <div className="factor">
-            <span>Reports</span>
+          <div className="factor" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: '12px', minHeight: '32px' }}>
+            <span className="factor-label">Reports</span>
             <div className="bar">
-              <div className="fill" style={{ width: `${prediction.contributingFactors.report_factor}%` }}></div>
+              <div 
+                className="fill" 
+                style={{ width: `${prediction.contributingFactors.report_factor}%` }}
+              ></div>
             </div>
-            <span>{prediction.contributingFactors.report_factor.toFixed(1)}</span>
+            <span className="factor-value">{prediction.contributingFactors.report_factor.toFixed(1)}</span>
           </div>
-          <div className="factor">
-            <span>Quality</span>
+          <div className="factor" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: '12px', minHeight: '32px' }}>
+            <span className="factor-label">Quality</span>
             <div className="bar">
-              <div className="fill" style={{ width: `${prediction.contributingFactors.quality_factor}%` }}></div>
+              <div 
+                className="fill" 
+                style={{ width: `${prediction.contributingFactors.quality_factor}%` }}
+              ></div>
             </div>
-            <span>{prediction.contributingFactors.quality_factor.toFixed(1)}</span>
+            <span className="factor-value">{prediction.contributingFactors.quality_factor.toFixed(1)}</span>
           </div>
-          <div className="factor">
-            <span>Water</span>
+          <div className="factor" style={{ display: 'grid', gridTemplateColumns: '80px 1fr 60px', gap: '12px', minHeight: '32px' }}>
+            <span className="factor-label">Water</span>
             <div className="bar">
-              <div className="fill" style={{ width: `${prediction.contributingFactors.water_factor}%` }}></div>
+              <div 
+                className="fill" 
+                style={{ width: `${prediction.contributingFactors.water_factor}%` }}
+              ></div>
             </div>
-            <span>{prediction.contributingFactors.water_factor.toFixed(1)}</span>
+            <span className="factor-value">{prediction.contributingFactors.water_factor.toFixed(1)}</span>
           </div>
         </div>
       </div>
 
       {/* Recommendations */}
-      <div className="recommendations">
-        <h3>Recommendations</h3>
-        <ul>
+      <div className="recommendations" style={{ padding: '16px 0', borderTop: '1px solid #f3f4f6' }}>
+        <h3 className="recommendations-title" style={{ marginBottom: '16px', paddingBottom: '8px', borderBottom: '1px solid #e5e7eb' }}>
+          Recommendations
+        </h3>
+        <ul className="recommendations-list" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {prediction.recommendations.map((rec, index) => (
-            <li key={index} className={rec.startsWith('PRIORITY') ? 'priority' : ''}>
+            <li 
+              key={index} 
+              className={`recommendation-item ${rec.startsWith('PRIORITY') ? 'priority' : ''}`}
+              style={{ display: 'block', marginBottom: '8px' }}
+            >
               {rec}
             </li>
           ))}

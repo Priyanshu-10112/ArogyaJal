@@ -197,9 +197,6 @@ public class SensorData {
         @JsonProperty("TDS_ppm")
         private Integer TDS_ppm;
         
-        @JsonProperty("DO_mgL")
-        private Double DO_mgL;
-        
         @JsonProperty("Temperature_C")
         @com.fasterxml.jackson.annotation.JsonAlias({"temperature_C", "temperature"})
         private Double temperature_C;
@@ -207,11 +204,10 @@ public class SensorData {
         public Sensors() {
         }
 
-        public Sensors(Double pH, Double turbidity_NTU, Integer TDS_ppm, Double DO_mgL, Double temperature_C) {
+        public Sensors(Double pH, Double turbidity_NTU, Integer TDS_ppm, Double temperature_C) {
             this.pH = pH;
             this.turbidity_NTU = turbidity_NTU;
             this.TDS_ppm = TDS_ppm;
-            this.DO_mgL = DO_mgL;
             this.temperature_C = temperature_C;
         }
 
@@ -240,14 +236,6 @@ public class SensorData {
             this.TDS_ppm = TDS_ppm;
         }
 
-        public Double getDO_mgL() {
-            return DO_mgL;
-        }
-
-        public void setDO_mgL(Double DO_mgL) {
-            this.DO_mgL = DO_mgL;
-        }
-
         public Double getTemperature_C() {
             return temperature_C;
         }
@@ -262,7 +250,6 @@ public class SensorData {
                     "pH=" + pH +
                     ", turbidity_NTU=" + turbidity_NTU +
                     ", TDS_ppm=" + TDS_ppm +
-                    ", DO_mgL=" + DO_mgL +
                     ", temperature_C=" + temperature_C +
                     '}';
         }
@@ -275,13 +262,12 @@ public class SensorData {
             return Objects.equals(pH, sensors.pH) && 
                    Objects.equals(turbidity_NTU, sensors.turbidity_NTU) && 
                    Objects.equals(TDS_ppm, sensors.TDS_ppm) && 
-                   Objects.equals(DO_mgL, sensors.DO_mgL) && 
                    Objects.equals(temperature_C, sensors.temperature_C);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(pH, turbidity_NTU, TDS_ppm, DO_mgL, temperature_C);
+            return Objects.hash(pH, turbidity_NTU, TDS_ppm, temperature_C);
         }
     }
     

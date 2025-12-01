@@ -123,9 +123,22 @@ const WaterQualityCard: React.FC<WaterQualityCardProps> = ({ deviceId }) => {
             >
               {batteryConfig.label}
             </div>
-            {waterQuality.deviceHealth.batteryVoltage && (
+            {waterQuality.deviceHealth.batteryLevel !== undefined && waterQuality.deviceHealth.batteryLevel !== null ? (
+              <div className="parameter-value">
+                {waterQuality.deviceHealth.batteryLevel.toFixed(0)}%
+                {waterQuality.deviceHealth.batteryVoltage && (
+                  <span style={{ fontSize: '0.8em', color: '#6b7280', marginLeft: '0.5rem' }}>
+                    ({waterQuality.deviceHealth.batteryVoltage.toFixed(2)}V)
+                  </span>
+                )}
+              </div>
+            ) : waterQuality.deviceHealth.batteryVoltage ? (
               <div className="parameter-value">
                 {waterQuality.deviceHealth.batteryVoltage.toFixed(2)} V
+              </div>
+            ) : (
+              <div className="parameter-value" style={{ color: '#6b7280' }}>
+                Not reported
               </div>
             )}
             <div className="parameter-range">Normal: 3.6 - 4.2V</div>

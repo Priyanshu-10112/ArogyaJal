@@ -449,4 +449,51 @@ public class EmergencyService {
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c;
     }
+
+
+    
+    /**
+     * Get active emergency alerts
+     */
+    public List<Map<String, Object>> getActiveAlerts() throws ExecutionException, InterruptedException {
+        try {
+            // Simple query without orderBy to avoid index requirement
+            List<QueryDocumentSnapshot> docs = firestore.collection("emergency_alerts")
+                    .whereEqualTo("status", "pending")
+                    .limit(50)
+                    .get().get().getDocuments();
+            
+            List<Map<String, Object>> alerts = new ArrayList<>();
+            for (QueryDocumentSnapshot doc : docs) {
+                Map<String, Object> alert = new HashMap<>();
+                alert.put("alertId", doc.getId());
+                alert.put("userId", doc.getString("userId"));
+                alert.put("userPhone", doc.getString("userPhone"));
+                alert.put("type", doc.getString("type"));
+                alert.put("location", doc.get("location"));
+                alert.put("address", doc.getString("address"));
+                alert.put("riskLevel", doc.getString("riskLevel"));
+                alert.put("status", doc.getString("status"));
+                
+                // Handle timestamp safely
+                com.google.cloud.Timestamp ts = doc.getTimestamp("timestamp");
+                if (ts != null) {
+                    alert.put("timestamp", ts.getSeconds());
+                } else {
+                    alert.put("timestamp", System.currentTimeMillis() / 1000);
+                }
+                
+                alerts.add(alert);
+            }
+            
+            // Sort in memory by timestamp (descending)
+            alerts.sort((a, b) -> Long.compare((Long)b.get("timestamp"), (Long)a.get("timestamp")));
+            
+            return alerts;
+            
+        } catch (Exception e) {
+            log.warn("Error fetching active alerts, returning empty list: {}", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
 }

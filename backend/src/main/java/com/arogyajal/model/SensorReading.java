@@ -45,7 +45,7 @@ public class SensorReading {
     private String notes;
     
     // Device status (IoT device health)
-    private Integer batteryLevel; // Battery percentage (0-100)
+    private Double batteryLevel; // Battery percentage (0-100)
     private Double batteryVoltage; // Battery voltage (e.g., 3.7V)
     private Integer signalStrength; // WiFi/Network signal strength in dBm (e.g., -65)
     private Long uptime; // Device uptime in seconds
@@ -224,11 +224,11 @@ public class SensorReading {
     }
     
     // Battery and device status getters/setters
-    public Integer getBatteryLevel() {
+    public Double getBatteryLevel() {
         return batteryLevel;
     }
     
-    public void setBatteryLevel(Integer batteryLevel) {
+    public void setBatteryLevel(Double batteryLevel) {
         this.batteryLevel = batteryLevel;
     }
     

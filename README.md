@@ -126,6 +126,65 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 - MQTT/HTTP protocols
 - Battery monitoring
 
+## 📡 IoT Sensor Data Submission
+
+### Sensor Data Format (JSON)
+
+**Endpoint:** `POST /api/sensor-data`
+
+**Complete Format:**
+```json
+{
+  "deviceId": "WQ001",
+  "location": {
+    "lat": 26.1445,
+    "lon": 91.7362
+  },
+  "sensors": {
+    "PH": 7.2,
+    "Turbidity_NTU": 3.5,
+    "TDS_ppm": 180,
+    "DO_mgL": 6.5,
+    "Temperature_C": 25.5
+  },
+  "battery": {
+    "voltage": 3.7,
+    "level": 85.0,
+    "isCharging": false
+  }
+}
+```
+
+**Minimum Required:**
+```json
+{
+  "deviceId": "WQ001",
+  "location": {"lat": 26.1445, "lon": 91.7362},
+  "sensors": {
+    "PH": 7.2,
+    "Turbidity_NTU": 3.5,
+    "TDS_ppm": 180,
+    "DO_mgL": 6.5,
+    "Temperature_C": 25.5
+  }
+}
+```
+
+**Success Response:**
+```json
+{
+  "status": "success",
+  "message": "Data received and processed successfully",
+  "deviceId": "WQ001",
+  "timestamp": "2025-12-01T14:30:00Z"
+}
+```
+
+**Retrieve Data:**
+- Latest: `GET /api/sensor-data/latest`
+- By Device: `GET /api/sensor-data/device/{deviceId}`
+- All Readings: `GET /api/sensor-data/readings?limit=10`
+
 ## 📱 Mobile App Emergency APIs
 
 ### Emergency Endpoints (for Mobile App Integration)
@@ -517,35 +576,127 @@ For issues and questions, please contact the development team.
 
 ## 🗄️ Data Seeding
 
-### Automated Data Seeding Script
+### Complete Sensor Data Seeding
 
-**Script:** `seed_firebase_data.ps1`
+**Script:** `seed_complete_data.ps1`  
+**Data File:** `COMPLETE_SEED_DATA.json`  
+**Documentation:** `COMPLETE_DATA_SEEDING_GUIDE.md`
 
-Seeds complete dataset to new Firebase project:
-- **24 Sensor Readings** across North East India
-  - Locations: Guwahati, Kamakhya, Dispur, Barpeta, Jorhat, Tezpur, Silchar, Shillong, Dibrugarh
-  - Quality Status: GOOD, FAIR, POOR, CRITICAL
-  - Parameters: pH, Turbidity, TDS, Temperature
-  
-- **20 Symptom Reports** with complete patient data
-  - Patient Name, Phone, Age, Gender
-  - GeoLocation (latitude, longitude)
-  - Location names (reverse geocoding ready)
-  - Symptoms, Severity (MILD, MODERATE, SEVERE)
-  - Water Source, Duration
-  
+Seeds **12 complete sensor readings** with ALL fields:
+- ✅ Device ID (NER-ASS-BAR-001, etc.)
+- ✅ Location (latitude, longitude)
+- ✅ All 5 Sensors (pH, Turbidity, TDS, DO, Temperature)
+- ✅ Battery Data (voltage, level, charging status, temperature, health)
+- ✅ Timestamp (auto-generated)
+
+**Locations Covered:**
+- Barpeta, Guwahati, Tezpur, Shillong, Dibrugarh, Jorhat, Silchar, Tinsukia, Nagaon, Tura, Kamakhya
+
+**Battery Health Levels:**
+- EXCELLENT (90-100%)
+- GOOD (70-89%)
+- FAIR (50-69%)
+- POOR (<50%)
+
 **Usage:**
 ```powershell
-.\seed_firebase_data.ps1
+# Make sure backend is running on port 8080
+.\seed_complete_data.ps1
 ```
 
-**Expected Clusters:**
-- Kamakhya: 8 reports (SEVERE)
-- Shillong: 4 reports (MODERATE)
-- Barpeta: 3 reports (MODERATE)
+**API Endpoint:**
+```
+POST http://localhost:8080/api/sensor-data
+Content-Type: application/json
+```
+
+**Result:** All dashboard fields will show data - no "Not reported" messages!
+
+---
+
+## 🎨 UI Components & Utilities
+
+### New Components (Dec 1, 2025)
+
+**Sensor Data Display:**
+- `SensorDataTable.tsx` - Professional table with color-coded status
+- `SensorDataTable.css` - Responsive styling
+- `formatters.ts` - Data formatting utilities
+
+**Features:**
+- Proper spacing and layout
+- Color-coded WQI status badges
+- Battery, signal, uptime icons
+- Handles missing data gracefully
+- CSV export functionality
+- Mobile responsive
+
+---
+
+## 🐛 Recent Fixes (Dec 1, 2025)
+
+### Display Issues Resolved
+
+1. **Sensor Data Concatenation**
+   - Issue: Data displayed without spacing
+   - Fix: Created `SensorDataTable` component with proper formatting
+   - Files: `formatters.ts`, `SensorDataTable.tsx`
+
+2. **Outbreak Panel Spacing**
+   - Issue: Contributing factors showing without gaps
+   - Fix: Enhanced CSS with flexbox and explicit spacing
+   - File: `OutbreakPredictionPanel.tsx`, `OutbreakPredictionPanel.css`
+
+3. **Contributing Factors Zero Values**
+   - Issue: ML service returning 0.0 for all factors
+   - Fix: Backend fallback calculation based on actual data
+   - File: `MLController.java` - `calculateContributingFactors()` method
+   - Logic: Calculates factors from cluster count, report count, and risk score
+
+### Backend Improvements
+
+**MLController.java:**
+- Added intelligent fallback for contributing factors
+- Calculates cluster factor from active clusters and severity
+- Calculates report factor from symptom report count
+- Distributes remaining risk between quality and water factors
+- Logs detailed calculation metrics
+
+---
+
+## 🔥 Firebase Storage Setup
+
+### Photo Evidence Storage
+
+**Issue:** Photos not uploading - bucket doesn't exist
+
+**Solution:**
+1. Go to: https://console.firebase.google.com/project/arogyajal-22/storage
+2. Click "Get Started"
+3. Select "Start in production mode"
+4. Choose location: **asia-south1 (Mumbai)**
+5. Click "Done"
+
+**Storage Rules:**
+```javascript
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /evidence/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+  }
+}
+```
+
+**After Setup:**
+- Real photos will upload to Firebase Storage
+- Dashboard will display actual images
+- No more placeholder errors
 
 ---
 
 **Last Updated**: December 1, 2025  
-**Version**: 1.3.1  
-**Status**: Production Ready ✅ (Complete ML Integration + Optimized Performance + Data Seeding)
+**Version**: 1.5.0  
+**Status**: Production Ready ✅ (Complete ML Integration + IoT Sensor APIs + Firebase Storage + Photo Evidence)

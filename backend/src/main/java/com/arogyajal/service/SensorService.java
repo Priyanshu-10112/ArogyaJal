@@ -184,7 +184,14 @@ public class SensorService {
             
             // Set battery info if available
             if (sensorData.getBattery() != null) {
-                reading.setNotes("Battery Voltage: " + sensorData.getBattery().getVoltage() + "V");
+                if (sensorData.getBattery().getVoltage() != null) {
+                    reading.setBatteryVoltage(sensorData.getBattery().getVoltage());
+                }
+                if (sensorData.getBattery().getLevel() != null) {
+                    reading.setBatteryLevel(sensorData.getBattery().getLevel());
+                }
+                log.info("Battery data saved - Voltage: {}V, Level: {}%", 
+                    reading.getBatteryVoltage(), reading.getBatteryLevel());
             }
             
             // Calculate overall severity based on all parameters
@@ -707,33 +714,37 @@ public class SensorService {
         // Always set the sensors object, even if all values are null
         sensorData.setSensors(sensors);
         
-        // Extract battery voltage from notes if available
-        if (reading.getNotes() != null && reading.getNotes().contains("Battery Voltage:")) {
+        // Set battery data from SensorReading fields (preferred) or extract from notes (fallback)
+        SensorData.Battery battery = new SensorData.Battery();
+        
+        // First try to get from dedicated fields
+        if (reading.getBatteryVoltage() != null) {
+            battery.setVoltage(reading.getBatteryVoltage());
+            log.debug("Battery voltage from field: {}V", reading.getBatteryVoltage());
+        }
+        if (reading.getBatteryLevel() != null) {
+            battery.setLevel(reading.getBatteryLevel());
+            log.debug("Battery level from field: {}%", reading.getBatteryLevel());
+        }
+        
+        // Fallback: Extract battery voltage from notes if fields are empty
+        if (battery.getVoltage() == null && reading.getNotes() != null && reading.getNotes().contains("Battery Voltage:")) {
             try {
-                // Extract the voltage value from notes
                 String notes = reading.getNotes();
                 int startIndex = notes.indexOf("Battery Voltage: ") + "Battery Voltage: ".length();
                 int endIndex = notes.indexOf("V", startIndex);
                 if (endIndex > startIndex) {
                     String voltageStr = notes.substring(startIndex, endIndex).trim();
                     Double voltage = Double.parseDouble(voltageStr);
-                    
-                    // Create and set battery object with the extracted voltage
-                    SensorData.Battery battery = new SensorData.Battery();
                     battery.setVoltage(voltage);
-                    sensorData.setBattery(battery);
-                    
-                    log.debug("Extracted battery voltage: {}V from notes", voltage);
+                    log.debug("Extracted battery voltage from notes: {}V", voltage);
                 }
             } catch (Exception e) {
-                log.warn("Failed to parse battery voltage from notes: " + reading.getNotes(), e);
-                // Fall back to empty battery object if parsing fails
-                sensorData.setBattery(new SensorData.Battery());
+                log.warn("Failed to parse battery voltage from notes: {}", reading.getNotes());
             }
-        } else {
-            // No battery info in notes, set empty battery object
-            sensorData.setBattery(new SensorData.Battery());
         }
+        
+        sensorData.setBattery(battery);
         
         // Set quality status from reading
         sensorData.setQualityStatus(reading.getQualityStatus());

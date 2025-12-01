@@ -16,6 +16,7 @@ export interface WaterQualityResponse {
   };
   deviceHealth: {
     batteryVoltage: number | null;
+    batteryLevel?: number | null;
     batteryStatus: 'NORMAL' | 'LOW' | 'CRITICAL' | 'NOT_REPORTING';
   };
   wqiScore?: number;
@@ -47,12 +48,30 @@ export interface DeviceInfo {
 }
 
 /**
+ * Calculate battery level from voltage (Li-ion: 3.0V-4.2V)
+ */
+const calculateBatteryLevel = (voltage: number | null): number | null => {
+  if (!voltage || voltage <= 0) return null;
+  const minVoltage = 3.0;
+  const maxVoltage = 4.2;
+  const percentage = ((voltage - minVoltage) / (maxVoltage - minVoltage)) * 100;
+  return Math.max(0, Math.min(100, percentage));
+};
+
+/**
  * Fetch water quality assessment for a device
  */
 export const getWaterQuality = async (deviceId: string): Promise<WaterQualityResponse> => {
   try {
     const response = await apiClient.get(`/sensor-data/water-quality/${deviceId}`);
-    return response.data;
+    const data = response.data;
+    
+    // Calculate battery level from voltage if not provided
+    if (data.deviceHealth && !data.deviceHealth.batteryLevel && data.deviceHealth.batteryVoltage) {
+      data.deviceHealth.batteryLevel = calculateBatteryLevel(data.deviceHealth.batteryVoltage);
+    }
+    
+    return data;
   } catch (error) {
     console.error('Error fetching water quality:', error);
     throw error;

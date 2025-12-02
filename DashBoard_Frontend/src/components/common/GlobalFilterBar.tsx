@@ -7,7 +7,7 @@ interface GlobalFilterBarProps {
 }
 
 const GlobalFilterBar: React.FC<GlobalFilterBarProps> = ({ showChangeButton = true }) => {
-  const { filter, roleMetadata, resetFilter, getBreadcrumb, isFieldLocked } = useGlobalFilter();
+  const { filter, roleMetadata, resetFilter, getBreadcrumb } = useGlobalFilter();
   const [showFilterModal, setShowFilterModal] = useState(false);
 
   const breadcrumb = getBreadcrumb();

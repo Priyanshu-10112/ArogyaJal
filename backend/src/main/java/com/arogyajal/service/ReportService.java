@@ -70,6 +70,20 @@ public class ReportService {
         // 6. Get ML prediction with real factors
         report.setMlPrediction(buildMLPredictionSummary(readings, alerts));
         
+        // 7. Add clarification message if no data available
+        if (readings.isEmpty() && alerts.isEmpty()) {
+            report.setClarificationMessage(
+                "No recent activity detected for this region.\n\n" +
+                "Possible reasons:\n" +
+                "• Sensor offline or in low-connectivity zone\n" +
+                "• No water quality issues detected\n" +
+                "• Maintenance or network downtime\n" +
+                "• Device battery drain\n\n" +
+                "Recommendation:\n" +
+                "Please verify device health on dashboard or re-run report after data update."
+            );
+        }
+        
         log.info("Report generated successfully with {} sensors, {} alerts",
                 reportingDevices.size(), alerts.size());
         
@@ -339,7 +353,9 @@ public class ReportService {
                 summary.setRiskLevel("UNKNOWN");
                 summary.setConfidence(0.0);
                 summary.setContributingFactors(new HashMap<>());
-                summary.setRecommendations(Arrays.asList("Prediction not available for this region in the last 24 hours"));
+                summary.setRecommendations(Arrays.asList(
+                    "Please verify device health on dashboard or re-run report after data update"
+                ));
                 summary.setExplanation("No sensor data or alerts available for risk assessment.");
                 return summary;
             }
@@ -610,8 +626,22 @@ public class ReportService {
         mlSummary.setRiskLevel("UNKNOWN");
         mlSummary.setConfidence(0.0);
         mlSummary.setContributingFactors(new HashMap<>());
-        mlSummary.setRecommendations(Arrays.asList("No data available for this region"));
+        mlSummary.setRecommendations(Arrays.asList(
+            "Please verify device health on dashboard or re-run report after data update"
+        ));
         report.setMlPrediction(mlSummary);
+        
+        // Add clarification message
+        report.setClarificationMessage(
+            "No recent activity detected for this region.\n\n" +
+            "Possible reasons:\n" +
+            "• Sensor offline or in low-connectivity zone\n" +
+            "• No water quality issues detected\n" +
+            "• Maintenance or network downtime\n" +
+            "• Device battery drain\n\n" +
+            "Recommendation:\n" +
+            "Please verify device health on dashboard or re-run report after data update."
+        );
         
         return report;
     }

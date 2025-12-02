@@ -9,11 +9,11 @@ const DashboardUpdated: React.FC = () => {
   const { filter, updateFilter } = useGlobalFilter();
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<DeviceInfo | null>(null);
-  const [loading, setLoading] = useState(false);
 
   // Fetch devices based on global filter
   useEffect(() => {
     fetchDevices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter.state, filter.district, filter.city, filter.village]);
 
   // Restore selected device from global filter
@@ -27,7 +27,6 @@ const DashboardUpdated: React.FC = () => {
   }, [filter.deviceId, devices]);
 
   const fetchDevices = async () => {
-    setLoading(true);
     try {
       const fetchedDevices = await getDevicesByLocation(
         filter.state || undefined,
@@ -57,14 +56,11 @@ const DashboardUpdated: React.FC = () => {
     } catch (error) {
       console.error('Error fetching devices:', error);
       setDevices([]);
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleDevicesChange = (newDevices: DeviceInfo[]) => {
     setDevices(newDevices);
-    setLoading(false);
 
     // Don't auto-select - let user choose
     // Only restore if deviceId exists in filter

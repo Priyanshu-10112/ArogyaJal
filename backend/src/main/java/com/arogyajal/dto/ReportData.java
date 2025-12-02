@@ -20,6 +20,9 @@ public class ReportData {
     // ML prediction
     private MLPredictionSummary mlPrediction;
     
+    // Clarification message for empty reports
+    private String clarificationMessage;
+    
     // Constructors
     public ReportData() {}
     
@@ -43,6 +46,11 @@ public class ReportData {
     public MLPredictionSummary getMlPrediction() { return mlPrediction; }
     public void setMlPrediction(MLPredictionSummary mlPrediction) { 
         this.mlPrediction = mlPrediction; 
+    }
+    
+    public String getClarificationMessage() { return clarificationMessage; }
+    public void setClarificationMessage(String clarificationMessage) { 
+        this.clarificationMessage = clarificationMessage; 
     }
     
     // Inner classes

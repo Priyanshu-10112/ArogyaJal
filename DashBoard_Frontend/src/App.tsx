@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faGauge, faChartLine, faBell, faMap, faBrain, faExclamationTriangle } from '@fortawesome/free-solid-svg-icons';
+import { faGauge, faChartLine, faBell, faMap, faBrain } from '@fortawesome/free-solid-svg-icons';
 import { GlobalFilterProvider } from './contexts/GlobalFilterContext';
 import { ToastProvider } from './contexts/ToastContext';
 import Layout from './components/common/Layout';
@@ -10,7 +10,6 @@ import Dashboard from './features/dashboard/Dashboard';
 import Trends from './features/trends/Trends';
 import MapPage from './features/map/MapPage';
 import MLDashboard from './features/ml/MLDashboard';
-import EmergencyDashboard from './pages/EmergencyDashboard';
 import './App.css';
 import './layout-fix.css';
 
@@ -52,10 +51,6 @@ const AppContent: React.FC = () => {
             <FontAwesomeIcon icon={faBrain} className="nav-icon" />
             <span>ML Dashboard</span>
           </Link>
-          <Link to="/emergency" className={`nav-link ${isActive('/emergency') ? 'active' : ''}`}>
-            <FontAwesomeIcon icon={faExclamationTriangle} className="nav-icon" />
-            <span>Emergency</span>
-          </Link>
         </nav>
       </aside>
 
@@ -69,7 +64,6 @@ const AppContent: React.FC = () => {
             <Route path="/trends" element={<Trends />} />
             <Route path="/map" element={<MapPage />} />
             <Route path="/ml-dashboard" element={<MLDashboard />} />
-            <Route path="/emergency" element={<div style={{ width: '100%', height: '100%' }}><EmergencyDashboard /></div>} />
           </Routes>
         </Layout>
       </div>

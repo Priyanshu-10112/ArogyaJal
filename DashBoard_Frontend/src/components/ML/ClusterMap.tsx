@@ -24,13 +24,7 @@ const ClusterMap: React.FC = () => {
   const [clusters, setClusters] = useState<Cluster[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchClusters();
-    const interval = setInterval(fetchClusters, 30000); // Refresh every 30 seconds
-    return () => clearInterval(interval);
-  }, [filter]);
-
-  const fetchClusters = async () => {
+  const fetchClusters = React.useCallback(async () => {
     const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
     
     try {
@@ -74,7 +68,13 @@ const ClusterMap: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    fetchClusters();
+    const interval = setInterval(fetchClusters, 30000); // Refresh every 30 seconds
+    return () => clearInterval(interval);
+  }, [fetchClusters]);
 
   const getClusterIcon = (score: number) => {
     const color = score >= 75 ? '#dc2626' : score >= 50 ? '#f59e0b' : '#10b981';

@@ -37,11 +37,12 @@ const LocationFilter: React.FC<LocationFilterProps> = ({ onDevicesChange, onBrea
     if (selectedCity) breadcrumb.push(selectedCity);
     if (selectedVillage) breadcrumb.push(selectedVillage);
     onBreadcrumbChange(breadcrumb);
-  }, [selectedState, selectedDistrict, selectedCity, selectedVillage]);
+  }, [selectedState, selectedDistrict, selectedCity, selectedVillage, onBreadcrumbChange]);
 
   // Load devices whenever filters change
   useEffect(() => {
     loadDevices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedState, selectedDistrict, selectedCity, selectedVillage]);
 
   const loadStates = async () => {

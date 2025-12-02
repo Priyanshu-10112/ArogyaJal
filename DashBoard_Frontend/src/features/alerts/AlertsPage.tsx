@@ -24,7 +24,7 @@ interface AlertStats {
 }
 
 const AlertsPage: React.FC = () => {
-  const { filter, getBreadcrumb } = useGlobalFilter();
+  const { filter } = useGlobalFilter();
   const { addToast } = useToast();
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [filteredAlerts, setFilteredAlerts] = useState<Alert[]>([]);
@@ -42,6 +42,7 @@ const AlertsPage: React.FC = () => {
   useEffect(() => {
     fetchAlerts();
     fetchStatistics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
 
   useEffect(() => {
@@ -53,10 +54,12 @@ const AlertsPage: React.FC = () => {
     }, 10000); // 10 seconds
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh]);
 
   useEffect(() => {
     filterAlerts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alerts, statusFilter, severityFilter, searchQuery]);
 
   const fetchAlerts = async () => {

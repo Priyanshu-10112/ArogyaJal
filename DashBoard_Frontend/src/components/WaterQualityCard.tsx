@@ -13,14 +13,7 @@ const WaterQualityCard: React.FC<WaterQualityCardProps> = ({ deviceId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchWaterQuality();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchWaterQuality, 30000);
-    return () => clearInterval(interval);
-  }, [deviceId]);
-
-  const fetchWaterQuality = async () => {
+  const fetchWaterQuality = React.useCallback(async () => {
     try {
       setLoading(true);
       const data = await getWaterQuality(deviceId);
@@ -32,7 +25,14 @@ const WaterQualityCard: React.FC<WaterQualityCardProps> = ({ deviceId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [deviceId]);
+
+  useEffect(() => {
+    fetchWaterQuality();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchWaterQuality, 30000);
+    return () => clearInterval(interval);
+  }, [fetchWaterQuality]);
 
   if (loading) {
     return (

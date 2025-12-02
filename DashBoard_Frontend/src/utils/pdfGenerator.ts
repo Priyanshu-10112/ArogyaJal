@@ -49,6 +49,7 @@ interface ReportData {
     recommendations: string[];
     explanation?: string;
   };
+  clarificationMessage?: string;
 }
 
 export const generatePDF = async (data: ReportData, captureCharts: boolean = true): Promise<void> => {
@@ -253,6 +254,37 @@ export const generatePDF = async (data: ReportData, captureCharts: boolean = tru
     doc.text('Sensor coverage information not available.', 20, yPos);
   }
   yPos += 10;
+
+  // ========== CLARIFICATION MESSAGE (if no data) ==========
+  if (data.clarificationMessage && reportingDevices === 0) {
+    checkPageBreak(50);
+    
+    // Draw a light blue info box
+    doc.setDrawColor(59, 130, 246);
+    doc.setFillColor(239, 246, 255);
+    doc.setLineWidth(0.5);
+    
+    // Calculate box height based on text
+    const messageLines = doc.splitTextToSize(data.clarificationMessage, 160);
+    const boxHeight = messageLines.length * 5 + 10;
+    
+    doc.roundedRect(20, yPos, 170, boxHeight, 3, 3, 'FD');
+    
+    // Add icon and title
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(59, 130, 246);
+    doc.text('ℹ️ No Recent Activity', 25, yPos + 7);
+    
+    // Add message text
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(30, 64, 175);
+    doc.text(messageLines, 25, yPos + 14);
+    
+    doc.setTextColor(0);
+    yPos += boxHeight + 10;
+  }
 
   // ========== SECTION 1: SUMMARY ==========
   doc.setFontSize(14);

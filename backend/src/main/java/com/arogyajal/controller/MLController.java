@@ -41,6 +41,7 @@ public class MLController {
     private final CacheManager cacheManager;
     private final com.arogyajal.service.SymptomClusterService clusterService;
     private final com.arogyajal.service.OutbreakPredictionService outbreakPredictionService;
+    private final com.arogyajal.scheduler.MLSyncScheduler mlSyncScheduler;
     
     // Simple cache for symptom clusters (30 second TTL)
     private Map<String, Object> cachedSymptomClusters = null;
@@ -49,12 +50,14 @@ public class MLController {
     
     public MLController(RestTemplate restTemplate, SymptomService symptomService, CacheManager cacheManager, 
                        com.arogyajal.service.SymptomClusterService clusterService,
-                       com.arogyajal.service.OutbreakPredictionService outbreakPredictionService) {
+                       com.arogyajal.service.OutbreakPredictionService outbreakPredictionService,
+                       com.arogyajal.scheduler.MLSyncScheduler mlSyncScheduler) {
         this.restTemplate = restTemplate;
         this.symptomService = symptomService;
         this.outbreakPredictionService = outbreakPredictionService;
         this.cacheManager = cacheManager;
         this.clusterService = clusterService;
+        this.mlSyncScheduler = mlSyncScheduler;
     }
     
     /**
@@ -741,6 +744,39 @@ public class MLController {
             
         } catch (Exception e) {
             log.error("❌ Error saving clusters to Firestore: {}", e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Manual trigger for ML sync
+     * Immediately triggers ML service sync instead of waiting for scheduled task
+     */
+    @PostMapping("/ml/sync/trigger")
+    @Operation(summary = "Trigger ML sync manually", description = "Manually trigger ML service sync for outbreak prediction")
+    public ResponseEntity<Map<String, Object>> triggerMLSync() {
+        log.info("🔄 Manual ML sync triggered via API");
+        
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            // Trigger the sync
+            mlSyncScheduler.syncWithMLService();
+            
+            // Get sync stats
+            Map<String, Object> stats = mlSyncScheduler.getSyncStats();
+            
+            response.put("status", "success");
+            response.put("message", "ML sync triggered successfully");
+            response.put("sync_stats", stats);
+            
+            log.info("✅ Manual ML sync completed successfully");
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("❌ Manual ML sync failed: {}", e.getMessage(), e);
+            response.put("status", "error");
+            response.put("message", "ML sync failed: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 }

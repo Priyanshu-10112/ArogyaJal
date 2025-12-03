@@ -4,13 +4,13 @@ import com.arogyajal.dto.ReportData;
 import com.arogyajal.model.Alert;
 import com.arogyajal.model.SensorReading;
 import com.arogyajal.repository.SensorRepository;
+import com.arogyajal.util.SensorDataValidator;
 import com.google.cloud.Timestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,42 +36,157 @@ public class ReportService {
     }
     
     public ReportData generateReport(String state, String district, String city, String village, int hours) {
-        log.info("Generating report for region: state={}, district={}, city={}, village={}, hours={}",
-                state, district, city, village, hours);
+        // NORMALIZE REGION INPUTS using validator
+        String normalizedState = SensorDataValidator.normalizeRegion(state);
+        String normalizedDistrict = SensorDataValidator.normalizeRegion(district);
+        String normalizedCity = SensorDataValidator.normalizeRegion(city);
+        String normalizedVillage = SensorDataValidator.normalizeRegion(village);
+        
+        log.info("Generating report for region: state={} (normalized: {}), district={} (normalized: {}), city={} (normalized: {}), village={} (normalized: {}), hours={}",
+                state, normalizedState, district, normalizedDistrict, city, normalizedCity, village, normalizedVillage, hours);
         
         ReportData report = new ReportData();
         
         // 1. Set metadata
         report.setMetadata(buildMetadata(state, district, city, village, hours));
         
-        // 2. Get sensor readings for time range
+        // 2. Get sensor readings for time range (RECENT DATA)
         Timestamp startTime = Timestamp.ofTimeSecondsAndNanos(
             Instant.now().minusSeconds(hours * 3600L).getEpochSecond(), 0);
         Timestamp endTime = Timestamp.now();
         
-        List<SensorReading> readings = getFilteredReadings(state, district, city, village, startTime, endTime);
+        List<SensorReading> rawReadings = getFilteredReadings(normalizedState, normalizedDistrict, normalizedCity, normalizedVillage, startTime, endTime);
         
-        // Update metadata with reporting devices count
+        boolean isFallbackMode = false;
+        
+        // FALLBACK MODE: If no recent data, get latest available readings
+        if (rawReadings.isEmpty()) {
+            log.warn("⚠ No readings in last {} hours. Activating FALLBACK MODE - fetching latest available data", hours);
+            rawReadings = getLatestAvailableReadings(normalizedState, normalizedDistrict, normalizedCity, normalizedVillage);
+            isFallbackMode = true;
+            
+            if (!rawReadings.isEmpty()) {
+                log.info("✅ Fallback mode: Retrieved {} latest readings", rawReadings.size());
+            }
+        }
+        
+        // VALIDATE SENSOR DATA - Filter out invalid readings
+        SensorDataValidator.ValidationResult validationResult = SensorDataValidator.validateReadings(rawReadings);
+        List<SensorReading> readings = validationResult.getValidReadings();
+        
+        log.info("Data validation: {} valid, {} discarded, {}% confidence",
+                validationResult.getValidCount(), validationResult.getDiscardedCount(),
+                String.format("%.1f", validationResult.getConfidencePercentage()));
+        
+        // Update metadata with reporting devices count and mode
         Set<String> reportingDevices = readings.stream()
             .map(SensorReading::getSensorId)
             .collect(Collectors.toSet());
         report.getMetadata().setReportingDevices24h(reportingDevices.size());
+        report.getMetadata().setFallbackMode(isFallbackMode);
         
-        // 3. Build water quality summary
-        report.setWaterQualitySummary(buildWaterQualitySummary(readings));
+        // Set dynamic messaging based on mode
+        if (isFallbackMode && !readings.isEmpty()) {
+            report.getMetadata().setDataModeMessage(
+                "⚠ No recent readings in the last " + hours + " hours for this region. " +
+                "Using latest available sensor values to avoid data blackout."
+            );
+            report.getMetadata().setCoverageMessage(
+                "Coverage: " + reportingDevices.size() + " sensors (fallback mode)."
+            );
+        } else if (!readings.isEmpty()) {
+            report.getMetadata().setDataModeMessage(
+                "Out of " + report.getMetadata().getConfiguredDevices() + " sensors, " + 
+                reportingDevices.size() + " reported in the last " + hours + " hours."
+            );
+        }
         
-        // 4. Build sensor history
-        report.setSensorHistory(buildSensorHistory(readings));
+        // 3. Build water quality summary with validation metrics
+        report.setWaterQualitySummary(buildWaterQualitySummary(readings, validationResult));
         
-        // 5. Get alerts
-        List<ReportData.AlertSummary> alerts = buildAlertsSummary(state, district, city, village, startTime, endTime);
-        report.setAlerts(alerts);
+        // 4. Build sensor history (with fallback mode flag)
+        report.setSensorHistory(buildSensorHistory(readings, isFallbackMode));
         
-        // 6. Get ML prediction with real factors
-        report.setMlPrediction(buildMLPredictionSummary(readings, alerts));
+        // 5. Get alerts (use normalized values)
+        List<ReportData.AlertSummary> allAlerts = buildAlertsSummary(normalizedState, normalizedDistrict, normalizedCity, normalizedVillage, startTime, endTime);
         
-        // 7. Add clarification message if no data available
-        if (readings.isEmpty() && alerts.isEmpty()) {
+        // ========================================================================
+        // PRIORITY RULE: SAFETY OVERRIDE - Prevent False High Risk When No Data
+        // ========================================================================
+        
+        // ========================================================================
+        // REPORT MODE CLASSIFICATION ENGINE
+        // ========================================================================
+        int reportingSensorCount = reportingDevices.size();
+        int configuredSensorCount = report.getMetadata().getConfiguredDevices();
+        int offlineSensorCount = configuredSensorCount - reportingSensorCount;
+        
+        String reportMode;
+        if (reportingSensorCount == 0) {
+            reportMode = "NO_DATA";
+        } else if (reportingSensorCount < configuredSensorCount) {
+            reportMode = "PARTIAL";
+        } else {
+            reportMode = "FULL";
+        }
+        
+        report.getMetadata().setReportMode(reportMode);
+        report.getMetadata().setOfflineSensors(offlineSensorCount);
+        report.getMetadata().setStaleSensors(0);  // Can be enhanced later
+        
+        log.info("Report Mode Classification: {} (reporting: {}, configured: {}, offline: {})",
+                reportMode, reportingSensorCount, configuredSensorCount, offlineSensorCount);
+        
+        boolean hasValidData = reportingSensorCount > 0 && !readings.isEmpty();
+        
+        if (!hasValidData) {
+            // NO VALID DATA - SUPPRESS PREDICTION
+            log.warn("⚠ SAFETY OVERRIDE: No valid sensor data available. Suppressing risk prediction.");
+            
+            // Move ALL alerts to historical section (not used for prediction)
+            report.setAlerts(new ArrayList<>());
+            report.setHistoricalAlerts(allAlerts);
+            
+            // Set suppressed prediction
+            report.setMlPrediction(buildSuppressedPrediction(reportingSensorCount, allAlerts.size()));
+            
+            // Add clarification message
+            report.setClarificationMessage(
+                "⚠ OUTBREAK RISK NOT COMPUTED — insufficient data.\n\n" +
+                "(" + reportingSensorCount + " reporting sensors detected this cycle)\n\n" +
+                "System requires at least 1 active sensor stream within the last " + hours + " hours.\n\n" +
+                "Possible reasons:\n" +
+                "• Sensors offline or in low-connectivity zone\n" +
+                "• Maintenance or network downtime\n" +
+                "• Device battery drain\n\n" +
+                "Recommendation:\n" +
+                "Please verify device health on dashboard or re-run report after data update."
+            );
+            
+            log.info("Report generated with SUPPRESSED prediction - no valid data available");
+            
+            // Add generation summary for NO_DATA mode
+            report.setGenerationSummary(buildGenerationSummary(
+                    reportMode,
+                    reportingSensorCount,
+                    offlineSensorCount,
+                    validationResult,
+                    0,  // No charts generated
+                    report.getMlPrediction()
+            ));
+            
+            return report;
+        }
+        
+        // VALID DATA EXISTS - Proceed with normal prediction
+        report.setAlerts(allAlerts);
+        report.setHistoricalAlerts(new ArrayList<>());
+        
+        // 6. Get ML prediction with real factors and alert alignment
+        report.setMlPrediction(buildMLPredictionSummary(readings, allAlerts, validationResult, reportingSensorCount));
+        
+        // 7. Add clarification message only if both readings and alerts are empty (shouldn't happen with valid data check)
+        if (readings.isEmpty() && allAlerts.isEmpty()) {
             report.setClarificationMessage(
                 "No recent activity detected for this region.\n\n" +
                 "Possible reasons:\n" +
@@ -85,9 +200,89 @@ public class ReportService {
         }
         
         log.info("Report generated successfully with {} sensors, {} alerts",
-                reportingDevices.size(), alerts.size());
+                reportingDevices.size(), allAlerts.size());
+        
+        // ========================================================================
+        // FINAL OUTPUT METADATA - Generation Summary
+        // ========================================================================
+        report.setGenerationSummary(buildGenerationSummary(
+                reportMode,
+                reportingSensorCount,
+                offlineSensorCount,
+                validationResult,
+                report.getSensorHistory().size(),
+                report.getMlPrediction()
+        ));
         
         return report;
+    }
+    
+
+    
+    /**
+     * Get latest available readings per sensor (FALLBACK MODE)
+     * Used when no recent data exists in the specified time range
+     */
+    private List<SensorReading> getLatestAvailableReadings(String state, String district, String city, String village) {
+        try {
+            // Get all readings (no time filter)
+            List<SensorReading> allReadings = sensorRepository.findAll();
+            
+            // Filter by location if specified
+            List<SensorReading> filteredReadings = allReadings.stream()
+                .filter(reading -> matchesLocation(reading, state, district, city, village))
+                .collect(Collectors.toList());
+            
+            // Group by sensor and get latest reading per sensor
+            Map<String, SensorReading> latestPerSensor = filteredReadings.stream()
+                .collect(Collectors.toMap(
+                    SensorReading::getSensorId,
+                    reading -> reading,
+                    (r1, r2) -> {
+                        if (r1.getTimestamp() == null) return r2;
+                        if (r2.getTimestamp() == null) return r1;
+                        return r1.getTimestamp().compareTo(r2.getTimestamp()) > 0 ? r1 : r2;
+                    }
+                ));
+            
+            List<SensorReading> latestReadings = new ArrayList<>(latestPerSensor.values());
+            
+            log.info("Fallback mode: Found {} latest readings from {} unique sensors", 
+                    latestReadings.size(), latestPerSensor.size());
+            
+            return latestReadings;
+            
+        } catch (Exception e) {
+            log.error("Error fetching latest available readings", e);
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Calculate human-readable age of a reading
+     */
+    private String calculateReadingAge(Timestamp timestamp) {
+        if (timestamp == null) return "Unknown age";
+        
+        long nowSeconds = Instant.now().getEpochSecond();
+        long readingSeconds = timestamp.getSeconds();
+        long ageSeconds = nowSeconds - readingSeconds;
+        
+        if (ageSeconds < 0) return "Future reading";
+        
+        long minutes = ageSeconds / 60;
+        long hours = minutes / 60;
+        long days = hours / 24;
+        
+        if (days > 0) {
+            return "Last update: " + days + " day" + (days > 1 ? "s" : "") + " ago";
+        } else if (hours > 0) {
+            return "Last update: " + hours + " hour" + (hours > 1 ? "s" : "") + " ago";
+        } else if (minutes > 0) {
+            return "Last update: " + minutes + " minute" + (minutes > 1 ? "s" : "") + " ago";
+        } else {
+            return "Last update: " + ageSeconds + " second" + (ageSeconds > 1 ? "s" : "") + " ago";
+        }
     }
     
     private ReportData.ReportMetadata buildMetadata(String state, String district, String city, String village, int hours) {
@@ -157,31 +352,88 @@ public class ReportService {
         }
     }
     
-    private boolean matchesLocation(SensorReading reading, String state, String district, String city, String village) {
-        // Simple location matching based on sensor location string
+    private boolean matchesLocation(SensorReading reading, String normalizedState, String normalizedDistrict, 
+                                    String normalizedCity, String normalizedVillage) {
+        // Location matching using NORMALIZED values
         String location = reading.getLocation();
         if (location == null) return false;
         
-        location = location.toLowerCase();
+        // Normalize the reading's location using validator
+        String normalizedLocation = SensorDataValidator.normalizeRegion(location);
+        if (normalizedLocation == null) return false;
         
-        if (village != null && !village.isEmpty() && !location.contains(village.toLowerCase())) {
+        // Match against normalized filter values
+        if (normalizedVillage != null && !normalizedVillage.isEmpty() && !normalizedLocation.contains(normalizedVillage)) {
             return false;
         }
-        if (city != null && !city.isEmpty() && !location.contains(city.toLowerCase())) {
+        if (normalizedCity != null && !normalizedCity.isEmpty() && !normalizedLocation.contains(normalizedCity)) {
             return false;
         }
-        if (district != null && !district.isEmpty() && !location.contains(district.toLowerCase())) {
+        if (normalizedDistrict != null && !normalizedDistrict.isEmpty() && !normalizedLocation.contains(normalizedDistrict)) {
             return false;
         }
-        if (state != null && !state.isEmpty() && !location.contains(state.toLowerCase())) {
+        if (normalizedState != null && !normalizedState.isEmpty() && !normalizedLocation.contains(normalizedState)) {
             return false;
         }
         
         return true;
     }
     
-    private ReportData.WaterQualitySummary buildWaterQualitySummary(List<SensorReading> readings) {
+    private ReportData.WaterQualitySummary buildWaterQualitySummary(List<SensorReading> readings, 
+                                                                     SensorDataValidator.ValidationResult validationResult) {
         ReportData.WaterQualitySummary summary = new ReportData.WaterQualitySummary();
+        
+        // Add validation metrics
+        ReportData.ValidationMetrics metrics = new ReportData.ValidationMetrics();
+        metrics.setTotalReadings(validationResult.getTotalCount());
+        metrics.setValidReadings(validationResult.getValidCount());
+        metrics.setDiscardedReadings(validationResult.getDiscardedCount());
+        metrics.setMissingReadings(validationResult.getMissingCount());
+        metrics.setConfidencePercentage(validationResult.getConfidencePercentage());
+        
+        // Build sensor status summary
+        ReportData.SensorStatusSummary sensorStatus = new ReportData.SensorStatusSummary();
+        Set<String> reportingSensors = readings.stream()
+            .map(SensorReading::getSensorId)
+            .collect(Collectors.toSet());
+        
+        // Get offline sensors from rejected readings
+        Set<String> offlineSensors = validationResult.getRejectedReadings().stream()
+            .filter(r -> r.getReason().contains("Missing") || r.getReason().contains("not installed"))
+            .map(r -> r.getSensorId())
+            .collect(Collectors.toSet());
+        
+        sensorStatus.setReportingSensors(reportingSensors.size());
+        sensorStatus.setNotReportingSensors(offlineSensors.size());
+        sensorStatus.setInstalledSensors(reportingSensors.size() + offlineSensors.size());
+        sensorStatus.setOfflineSensorIds(new ArrayList<>(offlineSensors));
+        
+        metrics.setSensorStatus(sensorStatus);
+        
+        // Build data quality message
+        StringBuilder qualityMsg = new StringBuilder();
+        
+        if (validationResult.getMissingCount() > 0) {
+            qualityMsg.append(String.format("⚠ Some sensors did not provide valid readings. " +
+                    "These values were excluded from calculations to avoid incorrect risk evaluation. "));
+        }
+        
+        if (validationResult.getDiscardedCount() > 0) {
+            qualityMsg.append(String.format("⚠ Some abnormal readings were detected and filtered before generating metrics. "));
+        }
+        
+        if (validationResult.getValidCount() > 0) {
+            qualityMsg.append(String.format("Data Confidence: %.0f%% (%d valid, %d missing, %d discarded)",
+                    validationResult.getConfidencePercentage(), 
+                    validationResult.getValidCount(),
+                    validationResult.getMissingCount(),
+                    validationResult.getDiscardedCount()));
+        } else {
+            qualityMsg.append("No valid data available for analysis");
+        }
+        
+        metrics.setDataQualityMessage(qualityMsg.toString());
+        summary.setValidationMetrics(metrics);
         
         if (readings.isEmpty()) {
             summary.setTotalSensors(0);
@@ -197,29 +449,25 @@ public class ReportService {
         summary.setTotalSensors(uniqueSensors.size());
         summary.setActiveSensors(uniqueSensors.size());
         
-        // Calculate stats for each parameter
+        // Calculate stats for each parameter (ONLY VALID READINGS - exclude missing/0.00 values)
         List<Double> phValues = readings.stream()
             .map(SensorReading::getPh)
-            .filter(Objects::nonNull)
-            .filter(v -> v > 0)
+            .filter(v -> !SensorDataValidator.isMissingValue(v))
             .collect(Collectors.toList());
         
         List<Double> tdsValues = readings.stream()
             .map(SensorReading::getTotalDissolvedSolids)
-            .filter(Objects::nonNull)
-            .filter(v -> v > 0)
+            .filter(v -> !SensorDataValidator.isMissingValue(v))
             .collect(Collectors.toList());
         
         List<Double> turbidityValues = readings.stream()
             .map(SensorReading::getTurbidity)
-            .filter(Objects::nonNull)
-            .filter(v -> v > 0)
+            .filter(v -> !SensorDataValidator.isMissingValue(v))
             .collect(Collectors.toList());
         
         List<Double> tempValues = readings.stream()
             .map(SensorReading::getTemperature)
-            .filter(Objects::nonNull)
-            .filter(v -> v > 0)
+            .filter(v -> !SensorDataValidator.isMissingValue(v))
             .collect(Collectors.toList());
         
         summary.setPh(calculateStats(phValues));
@@ -242,7 +490,7 @@ public class ReportService {
         return new ReportData.ParameterStats(min, max, avg);
     }
     
-    private List<ReportData.SensorHistory> buildSensorHistory(List<SensorReading> readings) {
+    private List<ReportData.SensorHistory> buildSensorHistory(List<SensorReading> readings, boolean isFallbackMode) {
         Map<String, List<SensorReading>> groupedBySensor = readings.stream()
             .collect(Collectors.groupingBy(SensorReading::getSensorId));
         
@@ -259,22 +507,35 @@ public class ReportService {
             
             List<ReportData.TimeSeriesData> timeSeriesData = sensorReadings.stream()
                 .sorted(Comparator.comparing(SensorReading::getTimestamp))
-                .map(this::convertToTimeSeriesData)
+                .map(reading -> convertToTimeSeriesData(reading, isFallbackMode))
                 .collect(Collectors.toList());
             
             sensorHistory.setReadings(timeSeriesData);
+            
+            // Add warning if fallback mode and only 1 reading
+            if (isFallbackMode && timeSeriesData.size() == 1) {
+                sensorHistory.setChartWarning("⚠ Single data point - chart not available. Table data only.");
+            } else if (isFallbackMode && timeSeriesData.size() > 1) {
+                sensorHistory.setChartWarning("⚠ This chart contains historical readings (not real-time).");
+            }
+            
             history.add(sensorHistory);
         }
         
         return history;
     }
     
-    private ReportData.TimeSeriesData convertToTimeSeriesData(SensorReading reading) {
+    private ReportData.TimeSeriesData convertToTimeSeriesData(SensorReading reading, boolean isFallbackMode) {
         ReportData.TimeSeriesData data = new ReportData.TimeSeriesData();
         
         if (reading.getTimestamp() != null) {
             data.setTimestamp(DateTimeFormatter.ISO_INSTANT.format(
                 Instant.ofEpochSecond(reading.getTimestamp().getSeconds())));
+            
+            // Add age tag in fallback mode
+            if (isFallbackMode) {
+                data.setAgeTag(calculateReadingAge(reading.getTimestamp()));
+            }
         }
         
         data.setPh(reading.getPh() != null ? reading.getPh() : 0);
@@ -302,26 +563,67 @@ public class ReportService {
         }
     }
     
-    private boolean matchesAlertLocation(Alert alert, String state, String district, String city, String village) {
+    private boolean matchesAlertLocation(Alert alert, String normalizedState, String normalizedDistrict, 
+                                        String normalizedCity, String normalizedVillage) {
         String location = alert.getLocation();
         if (location == null) return false;
         
-        location = location.toLowerCase();
+        // Normalize the alert's location using validator
+        String normalizedLocation = SensorDataValidator.normalizeRegion(location);
+        if (normalizedLocation == null) return false;
         
-        if (village != null && !village.isEmpty() && !location.contains(village.toLowerCase())) {
+        // Match against normalized filter values
+        if (normalizedVillage != null && !normalizedVillage.isEmpty() && !normalizedLocation.contains(normalizedVillage)) {
             return false;
         }
-        if (city != null && !city.isEmpty() && !location.contains(city.toLowerCase())) {
+        if (normalizedCity != null && !normalizedCity.isEmpty() && !normalizedLocation.contains(normalizedCity)) {
             return false;
         }
-        if (district != null && !district.isEmpty() && !location.contains(district.toLowerCase())) {
+        if (normalizedDistrict != null && !normalizedDistrict.isEmpty() && !normalizedLocation.contains(normalizedDistrict)) {
             return false;
         }
-        if (state != null && !state.isEmpty() && !location.contains(state.toLowerCase())) {
+        if (normalizedState != null && !normalizedState.isEmpty() && !normalizedLocation.contains(normalizedState)) {
             return false;
         }
         
         return true;
+    }
+    
+    /**
+     * Build suppressed prediction when no valid data is available
+     * SAFETY OVERRIDE: Prevents false high risk when sensors are offline
+     */
+    private ReportData.MLPredictionSummary buildSuppressedPrediction(int reportingSensorCount, int archivedAlertsCount) {
+        ReportData.MLPredictionSummary summary = new ReportData.MLPredictionSummary();
+        
+        summary.setRiskScore(null);
+        summary.setRiskLevel("DATA_UNAVAILABLE");
+        summary.setConfidence(null);
+        summary.setContributingFactors(new HashMap<>());
+        summary.setPredictionSuppressed(true);
+        summary.setSuppressionReason(
+            String.format("Insufficient data: %d reporting sensors detected this cycle", reportingSensorCount)
+        );
+        
+        summary.setExplanation(
+            String.format("⚠ Unable to generate outbreak prediction due to missing or outdated sensor data. " +
+                         "System requires at least 1 active sensor stream within the last 24 hours. " +
+                         "Currently: %d reporting sensors, %d historical alerts (not used for prediction).",
+                         reportingSensorCount, archivedAlertsCount)
+        );
+        
+        summary.setRecommendations(Arrays.asList(
+            "Verify sensor connectivity and power status",
+            "Check network connectivity in the region",
+            "Review device maintenance schedule",
+            "Re-run report after sensor data becomes available",
+            "Contact technical support if sensors remain offline"
+        ));
+        
+        log.info("Suppressed prediction generated - reportingSensors={}, archivedAlerts={}", 
+                reportingSensorCount, archivedAlertsCount);
+        
+        return summary;
     }
     
     private ReportData.AlertSummary convertToAlertSummary(Alert alert) {
@@ -343,21 +645,18 @@ public class ReportService {
     }
     
     private ReportData.MLPredictionSummary buildMLPredictionSummary(List<SensorReading> readings, 
-                                                                     List<ReportData.AlertSummary> alerts) {
+                                                                     List<ReportData.AlertSummary> alerts,
+                                                                     SensorDataValidator.ValidationResult validationResult,
+                                                                     int reportingSensorCount) {
         ReportData.MLPredictionSummary summary = new ReportData.MLPredictionSummary();
         
+        summary.setPredictionSuppressed(false);  // Normal prediction mode
+        
         try {
-            // If no data available, return early with clear message
+            // This should not happen due to safety override, but keep as fallback
             if (readings.isEmpty() && alerts.isEmpty()) {
-                summary.setRiskScore(0.0);
-                summary.setRiskLevel("UNKNOWN");
-                summary.setConfidence(0.0);
-                summary.setContributingFactors(new HashMap<>());
-                summary.setRecommendations(Arrays.asList(
-                    "Please verify device health on dashboard or re-run report after data update"
-                ));
-                summary.setExplanation("No sensor data or alerts available for risk assessment.");
-                return summary;
+                log.warn("buildMLPredictionSummary called with no data - should have been caught by safety override");
+                return buildSuppressedPrediction(reportingSensorCount, 0);
             }
             
             // Calculate real contributing factors based on actual data
@@ -420,7 +719,20 @@ public class ReportService {
             // Calculate total risk score
             double riskScore = clusterFactor + reportFactor + qualityFactor + sourceFactor;
             
-            // Determine risk level
+            // Check for CRITICAL alerts
+            long criticalAlerts = alerts.stream()
+                .filter(a -> "CRITICAL".equals(a.getSeverity()))
+                .count();
+            
+            // Check for anomalous readings (discarded data) - EXCLUDE missing sensors
+            // Missing sensors should NOT increase risk automatically
+            boolean hasAnomalies = validationResult.getDiscardedCount() > 0;
+            int missingCount = validationResult.getMissingCount();
+            
+            // Only consider it anomalous if there are actual bad readings, not just missing sensors
+            boolean hasActualAnomalies = (validationResult.getDiscardedCount() - missingCount) > 0;
+            
+            // Determine risk level with ML SCORE ALIGNMENT
             String riskLevel;
             if (riskScore >= 75) {
                 riskLevel = "CRITICAL";
@@ -432,13 +744,43 @@ public class ReportService {
                 riskLevel = "LOW";
             }
             
-            // Calculate confidence based on data availability
-            double confidence = calculateConfidence(readings, alerts);
+            // APPLY ML SCORE ALIGNMENT RULES
+            // NOTE: Missing sensors do NOT automatically increase risk
+            // Only increase risk for: clusters, poor water readings, or repeated stale data
+            
+            // Rule 1: If CRITICAL alert exists AND actual anomalies detected → minimum MEDIUM
+            if (criticalAlerts > 0 && hasActualAnomalies && "LOW".equals(riskLevel)) {
+                log.info("ML Score Alignment: Upgrading from LOW to MEDIUM due to CRITICAL alert + anomalies");
+                riskLevel = "MEDIUM";
+                riskScore = Math.max(riskScore, 25.0);
+            }
+            
+            // Rule 2: If multiple actual anomalies (>3, excluding missing) OR cluster exists → minimum HIGH
+            int actualAnomalyCount = validationResult.getDiscardedCount() - missingCount;
+            if ((actualAnomalyCount > 3 || clusterAlerts > 0) && 
+                ("LOW".equals(riskLevel) || "MEDIUM".equals(riskLevel))) {
+                log.info("ML Score Alignment: Upgrading to HIGH due to multiple anomalies ({}) or cluster ({})", 
+                        actualAnomalyCount, clusterAlerts);
+                riskLevel = "HIGH";
+                riskScore = Math.max(riskScore, 50.0);
+            }
+            
+            // Rule 3: Do NOT allow LOW if critical alert present OR actual sensor invalidated
+            // (Missing sensors alone don't trigger this)
+            if ("LOW".equals(riskLevel) && (criticalAlerts > 0 || hasActualAnomalies)) {
+                log.info("ML Score Alignment: Upgrading from LOW to MEDIUM due to critical alert or invalid sensors");
+                riskLevel = "MEDIUM";
+                riskScore = Math.max(riskScore, 25.0);
+            }
+            
+            // Calculate confidence based on data availability and validation
+            double confidence = calculateConfidence(readings, alerts, validationResult);
             
             // Generate human-readable explanation
             String explanation = generateExplanation(riskLevel, riskScore, confidence, 
                                                     clusterAlerts, highSeverityClusterAlerts, 
-                                                    poorSensors, totalSensors, waterQualityAlerts);
+                                                    poorSensors, totalSensors, waterQualityAlerts,
+                                                    criticalAlerts, hasActualAnomalies, missingCount);
             
             // Generate recommendations
             List<String> recommendations = generateRecommendations(riskLevel, clusterAlerts, poorSensors, waterQualityAlerts);
@@ -450,8 +792,8 @@ public class ReportService {
             summary.setRecommendations(recommendations);
             summary.setExplanation(explanation);
             
-            log.info("ML prediction calculated - Risk: {} ({}), Confidence: {}%, Factors: cluster={}, report={}, quality={}, source={}",
-                    riskScore, riskLevel, confidence, clusterFactor, reportFactor, qualityFactor, sourceFactor);
+            log.info("ML prediction calculated - Risk: {} ({}), Confidence: {}%, Factors: cluster={}, report={}, quality={}, source={}, Alignment: criticalAlerts={}, actualAnomalies={}, missingSensors={}",
+                    riskScore, riskLevel, confidence, clusterFactor, reportFactor, qualityFactor, sourceFactor, criticalAlerts, hasActualAnomalies, missingCount);
             
             return summary;
             
@@ -472,7 +814,8 @@ public class ReportService {
     
     private String generateExplanation(String riskLevel, double riskScore, double confidence,
                                        long clusterAlerts, long highSeverityClusterAlerts,
-                                       long poorSensors, long totalSensors, long waterQualityAlerts) {
+                                       long poorSensors, long totalSensors, long waterQualityAlerts,
+                                       long criticalAlerts, boolean hasActualAnomalies, int missingCount) {
         StringBuilder explanation = new StringBuilder();
         
         explanation.append(String.format("Current risk is %s with a score of %.1f and confidence %.1f%%. ", 
@@ -500,6 +843,19 @@ public class ReportService {
             factors.add(String.format("%d water quality alert(s)", waterQualityAlerts));
         }
         
+        if (criticalAlerts > 0) {
+            factors.add(String.format("%d CRITICAL alert(s) detected", criticalAlerts));
+        }
+        
+        if (hasActualAnomalies) {
+            factors.add("anomalous sensor readings detected and filtered");
+        }
+        
+        // Note about missing sensors (informational, not risk-increasing)
+        if (missingCount > 0) {
+            factors.add(String.format("%d sensor(s) not reporting (excluded from risk calculation)", missingCount));
+        }
+        
         if (factors.isEmpty()) {
             explanation.append("No significant risk factors detected. ");
             explanation.append("Continue routine monitoring and maintain preventive measures.");
@@ -520,7 +876,8 @@ public class ReportService {
         return explanation.toString();
     }
     
-    private double calculateConfidence(List<SensorReading> readings, List<ReportData.AlertSummary> alerts) {
+    private double calculateConfidence(List<SensorReading> readings, List<ReportData.AlertSummary> alerts,
+                                      SensorDataValidator.ValidationResult validationResult) {
         double confidence = 0.0;
         
         // Sensor data availability (0-40 points)
@@ -546,6 +903,10 @@ public class ReportService {
         } else {
             confidence += (alerts.size() / 3.0) * 30;
         }
+        
+        // Reduce confidence based on data quality (validation percentage)
+        double validationConfidence = validationResult.getConfidencePercentage();
+        confidence = confidence * (validationConfidence / 100.0);
         
         return Math.min(confidence, 100.0);
     }
@@ -598,6 +959,87 @@ public class ReportService {
     private String getStringValue(Map<String, Object> map, String key) {
         Object value = map.get(key);
         return value != null ? value.toString() : "";
+    }
+    
+    /**
+     * Build generation summary for validation and metadata
+     */
+    private ReportData.ReportGenerationSummary buildGenerationSummary(
+            String reportMode,
+            int sensorsReported,
+            int sensorsOffline,
+            SensorDataValidator.ValidationResult validationResult,
+            int chartsGenerated,
+            ReportData.MLPredictionSummary mlPrediction) {
+        
+        ReportData.ReportGenerationSummary summary = new ReportData.ReportGenerationSummary();
+        
+        summary.setReportMode(reportMode);
+        summary.setSensorsReported(sensorsReported);
+        summary.setSensorsOffline(sensorsOffline);
+        summary.setInvalidValuesFilteredCount(
+                validationResult.getDiscardedCount() + validationResult.getMissingCount()
+        );
+        summary.setChartsGeneratedCount(chartsGenerated);
+        
+        // Determine prediction status
+        String predictionStatus;
+        if (mlPrediction.isPredictionSuppressed()) {
+            predictionStatus = "SUPPRESSED";
+        } else if ("DATA_UNAVAILABLE".equals(mlPrediction.getRiskLevel())) {
+            predictionStatus = "SUPPRESSED";
+        } else if (mlPrediction.getConfidence() != null && mlPrediction.getConfidence() < 30) {
+            predictionStatus = "UNCERTAIN";
+        } else {
+            predictionStatus = "COMPUTED";
+        }
+        summary.setPredictionStatus(predictionStatus);
+        
+        // Validation checks
+        boolean validationPassed = true;
+        StringBuilder validationMsg = new StringBuilder();
+        
+        // Check 1: No impossible values
+        if (validationResult.getDiscardedCount() > 0) {
+            validationMsg.append("✓ Filtered ").append(validationResult.getDiscardedCount())
+                    .append(" invalid readings. ");
+        }
+        
+        // Check 2: ML prediction consistency
+        if ("NO_DATA".equals(reportMode) && !"SUPPRESSED".equals(predictionStatus)) {
+            validationPassed = false;
+            validationMsg.append("⚠ Prediction should be suppressed in NO_DATA mode. ");
+        }
+        
+        // Check 3: Sensor count consistency
+        if (sensorsReported + sensorsOffline > 0) {
+            validationMsg.append("✓ Sensor counts consistent. ");
+        }
+        
+        // Determine overall status
+        String status;
+        if (!validationPassed) {
+            status = "PARTIAL_FIX";
+        } else if ("NO_DATA".equals(reportMode)) {
+            status = "PASS";
+            validationMsg.append("✓ Safe report mode active (no data available).");
+        } else if ("PARTIAL".equals(reportMode)) {
+            status = "PASS";
+            validationMsg.append("✓ Partial data report generated successfully.");
+        } else {
+            status = "PASS";
+            validationMsg.append("✓ Full report generated successfully.");
+        }
+        
+        summary.setStatus(status);
+        summary.setValidationPassed(validationPassed);
+        summary.setValidationMessage(validationMsg.toString().trim());
+        
+        log.info("Generation Summary: status={}, mode={}, sensors={}/{}, filtered={}, prediction={}",
+                status, reportMode, sensorsReported, (sensorsReported + sensorsOffline),
+                summary.getInvalidValuesFilteredCount(), predictionStatus);
+        
+        return summary;
     }
     
     public ReportData generateEmptyReport(String state, String district, String city, String village) {

@@ -7,12 +7,13 @@
 ArogyaJal is an integrated IoT and ML-powered platform for monitoring water quality and predicting disease outbreaks across the North East India region (Assam, Meghalaya, Arunachal Pradesh, Nagaland, Manipur, Mizoram, Tripura, and Sikkim).
 
 ### Quick Stats
-- **Version:** 2.2.1 (Production Ready)
+- **Version:** 2.2.1 (Demo Ready - ML System 60% Complete)
 - **Active Sensors:** 18+ devices
 - **Coverage:** 8 NE states
-- **ML Accuracy:** 79% confidence (average)
+- **ML Confidence:** 45-79% (varies by data availability)
 - **Tech Stack:** React + Spring Boot + Python Flask + Firebase
-- **Key Features:** Real-time monitoring, ML predictions, PDF reports, Emergency APIs
+- **Key Features:** Real-time monitoring, ML predictions (partial), PDF reports, Emergency APIs
+- **Status:** ⚠️ Core features working, architecture enhancements needed for production
 
 ## ✨ Key Features
 
@@ -22,7 +23,9 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 - **Water Quality Index (WQI)**: Automated quality assessment
 - **Multi-level Alerts**: CRITICAL, HIGH, MEDIUM, LOW severity levels
 
-### 2. Outbreak Risk Prediction
+### 2. Outbreak Risk Prediction ⚠️ (Partial Implementation - 60% Complete)
+
+**✅ Working Features:**
 - **ML-Powered Risk Assessment**: Real-time outbreak risk scoring (0-100)
 - **DBSCAN Clustering**: Groups symptom reports by geographic proximity (5km radius, min 3 reports)
 - **Risk Calculation Formula**:
@@ -32,8 +35,16 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
   - Water Source Factor (0-10 points): (contaminated_sources / total_sources) × 10
 - **Confidence Metrics**: Based on data completeness (reports, sensors, coverage)
 - **Geographic Correlation**: Links symptom patterns to water quality issues
-- **Auto-sync**: Backend syncs with ML every 60 seconds
-- **Dashboard**: Fetches latest prediction from Firestore (cached 30s)
+- **Auto-sync**: Backend syncs with ML every 5 minutes (300 seconds)
+- **Dashboard**: Fetches latest prediction from Firestore (auto-refresh 60s)
+
+**❌ Missing Features (Needs Implementation):**
+- **Hybrid Fusion Logic**: Rule-based WQI and ML predictions not combined
+- **Temporal Trends**: No delta/rate-of-change features (cannot detect spike vs sustained)
+- **Active Alerts Input**: Alert count not included in ML feature set
+- **Historical Comparison**: No 24h/7d trend analysis
+
+**Impact:** System works for demos but may generate false alarms from isolated events. Needs 2-3 days of work for production readiness.
 
 ### 3. Hierarchical Location Filtering
 - **4-Level Hierarchy**: State → District → City/Town → Village
@@ -133,6 +144,139 @@ ArogyaJal is an integrated IoT and ML-powered platform for monitoring water qual
 - Multi-parameter water sensors
 - MQTT/HTTP protocols
 - Battery monitoring
+
+## 📡 Mobile App Sync Endpoints
+
+### 1. Water Tests Endpoint
+
+**Upload water quality field test:**
+```
+POST /api/mobile/water-tests
+```
+
+**Request Body:**
+```json
+{
+  "id": "water_test_1733234567890_abc123",
+  "sourceType": "handpump",
+  "sourceName": "Village Center Pump",
+  "pH": "7.2",
+  "tds": 450,
+  "turbidity": "low",
+  "riskLevel": "Medium",
+  "latitude": 26.1234,
+  "longitude": 91.5678,
+  "reporterId": "ASHA001",
+  "reporterType": "ASHA"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Water test uploaded successfully",
+  "data": {
+    "id": "water_test_1733234567890_abc123",
+    "uploadedAt": "2025-12-03T10:35:00.000Z"
+  }
+}
+```
+
+### 2. Household Surveys Endpoint
+
+**Upload household health survey:**
+```
+POST /api/mobile/household-surveys
+```
+
+**Request Body:**
+```json
+{
+  "id": "survey_1733234567890_xyz789",
+  "state": "Assam",
+  "district": "Jorhat",
+  "village": "Kamalabari",
+  "householdId": "AS-321-321101-2025-1234-7",
+  "headOfHousehold": "Ram Kumar",
+  "totalMembers": "5",
+  "waterSource": "Handpump",
+  "riskLevel": "Low"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Household survey uploaded successfully",
+  "data": {
+    "id": "survey_1733234567890_xyz789",
+    "uploadedAt": "2025-12-03T10:35:00.000Z"
+  }
+}
+```
+
+### 3. Batch Sync Endpoint (Recommended)
+
+**Upload multiple records in one request:**
+```
+POST /api/mobile/sync/batch
+```
+
+**Request Body:**
+```json
+{
+  "userId": "ASHA001",
+  "deviceId": "device_abc123",
+  "syncTimestamp": "2025-12-03T10:35:00.000Z",
+  "waterTests": [
+    { "id": "water_test_123", "sourceType": "handpump", ... }
+  ],
+  "householdSurveys": [
+    { "id": "survey_123", "state": "Assam", ... }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Batch sync completed",
+  "results": {
+    "waterTests": {
+      "uploaded": 1,
+      "failed": 0,
+      "ids": ["water_test_123"]
+    },
+    "householdSurveys": {
+      "uploaded": 1,
+      "failed": 0,
+      "ids": ["survey_123"]
+    }
+  },
+  "syncedAt": "2025-12-03T10:35:00.000Z"
+}
+```
+
+### Query Endpoints
+
+**Get all water tests:**
+```
+GET /api/mobile/water-tests
+GET /api/mobile/water-tests/{id}
+GET /api/mobile/water-tests/reporter/{reporterId}
+GET /api/mobile/water-tests/risk/{riskLevel}
+```
+
+**Get all household surveys:**
+```
+GET /api/mobile/household-surveys
+GET /api/mobile/household-surveys/{id}
+GET /api/mobile/household-surveys/village/{village}
+GET /api/mobile/household-surveys/risk/{riskLevel}
+```
 
 ## 📡 IoT Sensor Data Submission
 
@@ -293,28 +437,58 @@ Response: [{ "name": "ASHA Worker", "phone": "+91-9876543210", "role": "Primary"
 
 ### 2. API Endpoints
 
-**Sensor Data:**
+**Mobile App APIs** (`/api/mobile/*`)
+
+*Water Tests:*
+- `POST /api/mobile/water-tests` - Upload single water test
+- `GET /api/mobile/water-tests` - Get all water tests
+- `GET /api/mobile/water-tests/{id}` - Get water test by ID
+- `GET /api/mobile/water-tests/reporter/{reporterId}` - Get by reporter
+- `GET /api/mobile/water-tests/risk/{riskLevel}` - Get by risk level
+
+*Household Surveys:*
+- `POST /api/mobile/household-surveys` - Upload single survey
+- `GET /api/mobile/household-surveys` - Get all surveys
+- `GET /api/mobile/household-surveys/{id}` - Get survey by ID
+- `GET /api/mobile/household-surveys/village/{village}` - Get by village
+- `GET /api/mobile/household-surveys/risk/{riskLevel}` - Get by risk level
+
+*Health Reports (Symptom Reports):*
+- `POST /api/symptoms` - Submit health/symptom report (mobile)
+- `GET /api/symptoms/reports` - Get all health reports
+- `GET /api/symptoms/reports/{id}` - Get report by ID
+- `GET /api/symptoms/reports/location/{location}` - Get by location
+
+*Issue Reports:*
+- `POST /api/mobile/issue-reports` - Upload issue report
+- `GET /api/mobile/issue-reports` - Get all issue reports
+- `GET /api/mobile/issue-reports/{id}` - Get issue by ID
+- `GET /api/mobile/issue-reports/reporter/{reporterId}` - Get by reporter
+- `GET /api/mobile/issue-reports/severity/{severity}` - Get by severity
+- `GET /api/mobile/issue-reports/status/{status}` - Get by status
+
+*Batch Sync:*
+- `POST /api/mobile/sync/batch` - Batch upload (waterTests, householdSurveys, healthReports, issueReports)
+
+**Dashboard APIs** (`/api/*`)
+
+*Sensor Data:*
 - `GET /api/sensors/readings` - All sensor readings
 - `GET /api/sensor-data/water-quality/{deviceId}` - Device quality assessment
 
-**Alerts:**
+*Alerts:*
 - `GET /api/alerts` - All alerts
 - `POST /api/alerts/{id}/acknowledge` - Acknowledge alert
 - `POST /api/alerts/{id}/resolve` - Resolve and delete alert
 
-**Locations:**
+*Locations:*
 - `GET /api/locations/states` - All states
 - `GET /api/locations/districts?state={state}` - Districts by state
 - `GET /api/locations/cities?state={state}&district={district}` - Cities
 - `GET /api/locations/villages?state={state}&district={district}&city={city}` - Villages
 - `GET /api/locations/devices` - Devices by location hierarchy
 
-**Symptom Reports:**
-- `POST /api/symptoms/reports` - Submit new symptom report
-- `GET /api/symptoms/reports` - Get all symptom reports
-- `GET /api/symptoms/reports/location/{location}` - Reports by location
-
-**ML Predictions:**
+*ML Predictions:*
 - `GET /api/outbreak-predictions/latest` - Latest outbreak risk score
 - `GET /api/symptom-clusters` - Active symptom clusters (DBSCAN results)
 - `GET /api/clusters/active` - Active clusters for map visualization
@@ -390,6 +564,48 @@ REACT_APP_ML_API_URL=http://localhost:5000
 - **WQI Classification**: Standardized 5-level system (Excellent to Very Poor)
 
 ## 🎨 Recent Improvements & Features
+
+### ✅ Complete Data Validation & Report Standardization (Dec 2, 2025)
+
+**Production-Ready Report System with 4-Layer Validation:**
+
+1. **Data Validation & Normalization**
+   - Region normalization (case-insensitive, special char handling)
+   - Sensor data validation (pH 1-14, TDS 0-2000, Turbidity 0-300, Temp 0-80°C)
+   - Missing value detection (0.00, null, NaN → "Sensor Not Installed")
+   - Invalid readings filtered before aggregation
+
+2. **Report Mode Classification**
+   - FULL: All sensors reporting
+   - PARTIAL: Some sensors offline
+   - NO_DATA: No sensors reporting
+   - Automatic mode detection and appropriate messaging
+
+3. **Safety Override System**
+   - Prevents false high risk when no data available
+   - Suppresses ML prediction if 0 sensors reporting
+   - Moves alerts to "Historical" section when no data
+   - Clear "DATA_UNAVAILABLE" status
+
+4. **PDF Rendering Fixes**
+   - Text sanitization (emojis → text labels: ⚠️ → [Warning])
+   - Hidden character removal (zero-width spaces, BOM)
+   - HTML list conversion (<ul><li> → plain text bullets)
+   - Smart typography normalization (smart quotes → ASCII)
+   - Failsafe error handling with placeholders
+
+**Key Improvements:**
+- ✅ No false alarms when sensors offline
+- ✅ Clean, government-standard PDF output
+- ✅ Accurate risk assessment (missing sensors don't inflate scores)
+- ✅ Professional messaging and formatting
+- ✅ Complete validation metadata for monitoring
+
+**Implementation:**
+- `SensorDataValidator.java` - Validation engine
+- `ReportService.java` - 4-layer processing pipeline
+- `pdfGenerator.ts` - Enhanced text sanitization
+- `ReportData.java` - Validation metrics and report modes
 
 ### ✅ Report Generation Feature (Dec 1, 2025)
 
@@ -488,46 +704,128 @@ For issues and questions, please contact the development team.
 
 ## 🎯 ML Integration Status
 
-### ✅ Complete End-to-End Pipeline
+### ⚠️ PARTIAL IMPLEMENTATION - NEEDS ENHANCEMENT
 
-**Symptom Reports → ML Clustering → Outbreak Prediction → Dashboard**
+**Current Status: 60% Complete - Core Features Working, Architecture Gaps Present**
 
-1. **Symptom Clustering (DBSCAN)**
-   - Algorithm: DBSCAN with eps=5km, min_samples=3
-   - Automatic clustering every 60 seconds
+#### ✅ **Working Components:**
+
+1. **DBSCAN Clustering** ✓
+   - Algorithm: DBSCAN with eps=5km, min_samples=3, haversine distance
+   - Implementation: `ML/api.py` (lines 390-480)
+   - Automatic clustering via `/api/ml/cluster` endpoint
    - Clusters saved to Firestore with severity scores
    - Geographic correlation with water quality sensors
 
-2. **Outbreak Risk Prediction**
+2. **Outbreak Risk Prediction** ✓
    - Real-time risk scoring (0-100) with confidence metrics
-   - Contributing factors: Clusters, Reports, Water Quality, Sources
-   - Risk levels: LOW, MEDIUM, HIGH, CRITICAL
+   - Formula: cluster_factor (0-50) + report_factor (0-20) + quality_factor (0-20) + source_factor (0-10)
+   - Risk levels: LOW (<25), MEDIUM (25-50), HIGH (50-75), CRITICAL (75+)
    - Location-specific predictions stored in Firestore
+   - Backend sync every 5 minutes (300 seconds)
 
-3. **Dashboard Integration**
-   - Live risk display with auto-refresh (30s)
+3. **Dashboard Integration** ✓
+   - Live risk display with auto-refresh (60s)
    - Cluster visualization on interactive map
-   - State/region filtering support
+   - Contributing factors breakdown (4 factors)
    - Priority-based recommendations
 
-### Recent Fixes (Nov 27, 2025)
+4. **Rule-Based WQI Calculation** ✓
+   - WHO/BIS threshold implementation in `WQICalculator.java`
+   - Formula: (pH×0.25) + (Turbidity×0.30) + (TDS×0.25) + (Temperature×0.20)
+   - 5-level classification: Excellent, Good, Fair, Poor, Very Poor
 
-**Backend Improvements:**
-- ✅ Fixed ML response field mapping (snake_case → camelCase)
-- ✅ Cluster severity validation (HIGH → SEVERE/CRITICAL)
-- ✅ Detection method validation (ML_CLUSTERING → HYBRID)
-- ✅ ReportIds extraction from ML clustering response
-- ✅ Increased RestTemplate timeout (5s → 30s)
-- ✅ Dashboard endpoint now fetches from Firestore (not cached ML)
-- ✅ Added state/region metadata to clusters for frontend filtering
-- ✅ Debug logging for cluster severity tracking
+#### ❌ **Missing Critical Components:**
+
+1. **NO HYBRID FUSION LOGIC** ⚠️
+   - Rule-based WQI and ML predictions run **independently**
+   - Missing: `final_risk = max(rule_risk, ml_risk)` fusion
+   - Impact: Cannot combine threshold violations with ML predictions
+   - **Required for production readiness**
+
+2. **NO TEMPORAL TREND FEATURES** ⚠️
+   - No delta/rate-of-change calculation
+   - No historical comparison (24h, 7d trends)
+   - Cannot distinguish "single spike" vs "sustained trend"
+   - Impact: May generate false alarms from isolated events
+   - **Required for robust outbreak detection**
+
+3. **MISSING ACTIVE ALERTS INPUT** ⚠️
+   - Active alerts count NOT extracted as ML feature
+   - System ignores existing alert context
+   - Impact: Incomplete risk assessment
+   - **Should be included in feature set**
+
+#### 📊 **ML Input Completeness: 70%**
+
+**Present Inputs:**
+- ✅ pH, TDS, Turbidity, Temperature (4 core sensors)
+- ✅ WQI (calculated)
+- ✅ Symptom report counts
+- ✅ Spatial clustering features (DBSCAN)
+
+**Missing Inputs:**
+- ❌ Active alerts count
+- ❌ Trend/delta features (temporal analysis)
+- ❌ Historical comparison metrics
+
+#### 🏗️ **Architecture Status: WEAK**
+
+**Current Flow:**
+```
+Sensors → WQI Calculation (rule-based) → Stored separately
+Sensors + Symptoms → ML Prediction → Stored separately
+❌ NO FUSION STEP
+```
+
+**Required Flow:**
+```
+Sensors → Rule-based Risk (WQI thresholds)
+              ↓
+Sensors + Symptoms → ML Risk
+              ↓
+         FUSION: max(rule_risk, ml_risk) → Final Risk
+```
+
+#### 🎯 **Recommendation for SIH Demo:**
+
+**Current System:**
+- ✅ Works for basic demos and happy path scenarios
+- ✅ Shows ML capabilities (DBSCAN, risk scoring, explainability)
+- ⚠️ Vulnerable to judge questions about architecture completeness
+
+**Priority Fixes (2-3 days):**
+1. **Implement hybrid fusion logic** (4 hours) - CRITICAL
+2. **Add temporal trend features** (6 hours) - HIGH
+3. **Include active alerts in features** (2 hours) - MEDIUM
+
+**Without fixes:** Expect judges to rate as "prototype-level" rather than "production-ready"
+
+### Recent Fixes & Known Issues (Dec 3, 2025)
+
+**✅ Working Components:**
+- ML response field mapping (snake_case → camelCase)
+- Cluster severity validation and scoring
+- ReportIds extraction from ML clustering
+- RestTemplate timeout configuration (30s)
+- Dashboard Firestore integration
+- State/region metadata for filtering
+- DBSCAN clustering with haversine distance
+
+**⚠️ Known Architectural Gaps (Identified Dec 3, 2025):**
+- **NO FUSION LOGIC**: Rule-based WQI and ML predictions not combined
+- **NO TREND FEATURES**: Missing temporal delta/rate-of-change calculation
+- **MISSING ALERTS INPUT**: Active alerts not included in ML feature set
+- **STATIC RISK CALC**: No historical comparison or trend analysis
 
 **Integration Components:**
 - `MLController.java` - ML service communication & caching
-- `MLPayloadService.java` - Unified payload assembly with cluster severity
+- `MLPayloadService.java` - Unified payload assembly (needs trend features)
 - `SymptomClusterController.java` - Cluster API with location metadata
-- `OutbreakPredictionService.java` - Firestore prediction storage
+- `OutbreakPredictionService.java` - Firestore prediction storage (needs fusion logic)
 - `RestTemplateConfig.java` - Timeout configuration for ML operations
+- `WQICalculator.java` - Rule-based thresholds (needs integration with ML)
+- `ML/api.py` - DBSCAN clustering and risk prediction (needs trend inputs)
 
 ### Known Backend Requirements
 
@@ -699,6 +997,305 @@ cd DashBoard_Frontend && npm start
 
 ---
 
-**Last Updated**: December 1, 2025  
+---
+
+**Last Updated**: December 3, 2025  
 **Version**: 2.2.1  
-**Status**: Production Ready ✅ (Complete ML Integration + IoT APIs + Report Generation + Firebase Storage)
+**Project Status**: ⚠️ **DEMO READY** (Core Features Working, Architecture Enhancements Needed)
+
+**What's Working:**
+- ✅ Real-time water quality monitoring with 18+ sensors
+- ✅ IoT sensor data collection and storage
+- ✅ DBSCAN clustering for symptom reports (eps=5km, min_samples=3)
+- ✅ ML risk scoring (0-100) with 4 contributing factors
+- ✅ Dashboard with risk visualization and explainability
+- ✅ PDF report generation for officials
+- ✅ Alert system with N8N webhook integration
+- ✅ Hierarchical location filtering (State → District → City → Village)
+- ✅ Mobile app sync endpoints (water tests, surveys, symptom reports)
+
+**What's Missing (ML System - 40%):**
+- ❌ Hybrid fusion logic (rule-based + ML combination)
+- ❌ Temporal trend features (24h/7d deltas)
+- ❌ Active alerts as ML input
+- ❌ Historical comparison for spike detection
+
+**Recommendation for SIH:**
+- **Current State:** Suitable for demonstrations, shows ML capabilities
+- **For Production:** Needs 2-3 days (18 hours) of focused work
+- **Expected Score:** 6-7/10 as-is, 9-10/10 with fixes
+
+
+---
+
+## 🔬 ML SYSTEM DETAILED STATUS REPORT (Dec 3, 2025)
+
+### Executive Summary
+
+**Overall Status:** ⚠️ **60% Complete - Demo Ready, Production Enhancements Needed**
+
+The ML system has **solid foundations** (DBSCAN clustering, risk scoring, explainability) but suffers from **critical architectural gaps** that will be exposed during SIH judging. The system works for basic demos but lacks the robustness expected for production deployment.
+
+### Detailed Component Analysis
+
+#### 1. Input Completeness: ❌ **70% (PARTIAL)**
+
+**✅ Present Inputs:**
+- pH, TDS, Turbidity, Temperature (4 core sensors)
+- WQI (calculated via formula)
+- Symptom report counts (aggregated)
+- Spatial clustering features (DBSCAN results)
+- Cluster severity scores
+- Geographic coordinates
+
+**❌ Missing Inputs:**
+- **Active alerts count** - NOT extracted as feature
+- **Trend/delta features** - NO temporal analysis
+  - Missing: 24h WQI delta
+  - Missing: 7d report trend
+  - Missing: Cluster growth rate
+- **Historical comparison** - NO time-series features
+
+**Impact:** Cannot distinguish "single spike" vs "sustained trend", may generate false alarms.
+
+---
+
+#### 2. Output Completeness: ✅ **100% (PASS)**
+
+**All Required Outputs Present:**
+- ✅ Numeric Risk Score (0-100)
+- ✅ Categorical Risk Level (LOW/MEDIUM/HIGH/CRITICAL)
+- ✅ Confidence score (%)
+- ✅ Explanation layer (4 contributing factors)
+- ✅ Recommendations (risk-level specific)
+
+**Evidence:** `OutbreakPredictionPanel.tsx` displays all outputs with visual indicators.
+
+---
+
+#### 3. Architecture Validity: ❌ **WEAK - MISSING FUSION**
+
+**✅ Present Components:**
+- Rule-based engine (`WQICalculator.java`) - WHO/BIS thresholds
+- ML inference layer (`ML/api.py`) - DBSCAN + risk prediction
+- Backend orchestration (`MLSyncScheduler.java`) - 5-minute sync
+
+**❌ Critical Missing Component:**
+- **NO FUSION LOGIC** - Rule-based and ML predictions are **siloed**
+- Missing: `final_risk = max(rule_risk, ml_risk)`
+- WQI thresholds and ML predictions never combined
+
+**Current Flow (WRONG):**
+```
+Sensors → WQI Calculation → Stored separately
+Sensors + Symptoms → ML Prediction → Stored separately
+❌ NO FUSION
+```
+
+**Required Flow (CORRECT):**
+```
+Sensors → Rule-based Risk (WQI thresholds)
+              ↓
+Sensors + Symptoms → ML Risk
+              ↓
+         FUSION: max(rule_risk, ml_risk) → Final Risk
+```
+
+**Impact:** Judges will immediately ask "How do you combine rule-based with ML?" and you'll have no answer.
+
+---
+
+#### 4. Behaviour Logic: ⚠️ **PARTIAL - LACKS TREND SENSITIVITY**
+
+**✅ Logical Scenarios (Working):**
+- High symptoms + normal water → Risk increases ✓
+- Poor water + no symptoms → Medium risk ✓
+- No symptoms + safe water → Low risk ✓
+
+**❌ Missing Scenario:**
+- **Single spike event** → System CANNOT detect "sustained trend"
+- Reason: NO temporal delta features
+- Risk calculated from **current snapshot only**
+
+**Risk Formula (Static):**
+```python
+risk_score = cluster_score + report_score + quality_score + source_score
+# Problem: No consideration of whether values are increasing/decreasing
+```
+
+**Impact:** May trigger false alarms from isolated events, cannot detect gradual deterioration.
+
+---
+
+#### 5. Explainability: ✅ **100% (PASS)**
+
+**Complete Transparency:**
+- ✅ Factor breakdown (4 components with individual scores)
+- ✅ Recommendations (risk-level specific actions)
+- ✅ Confidence calculation (data completeness based)
+- ✅ Dashboard visualization (risk circle, factor bars, recommendations)
+
+**Evidence:** Full explainability layer implemented in `OutbreakPredictionPanel.tsx`.
+
+---
+
+#### 6. Risk of Failure in SIH Judging: ⚠️ **MEDIUM**
+
+**Strengths (Will Impress Judges):**
+- ✅ DBSCAN clustering with proper haversine distance
+- ✅ Complete output structure with explainability
+- ✅ Good dashboard visualization
+- ✅ Backend orchestration working
+
+**Weaknesses (Will Be Questioned):**
+- ❌ **NO FUSION LOGIC** - "How do you combine rule-based with ML?"
+- ❌ **NO TREND FEATURES** - "How do you prevent false alarms from spikes?"
+- ❌ **MISSING ALERTS INPUT** - "Why aren't existing alerts considered?"
+
+**Expected Judge Questions:**
+1. "Your WQI calculator uses thresholds, but how does that integrate with ML predictions?"
+   - **Current Answer:** "They run separately" ❌
+   - **Required Answer:** "We use max(rule_risk, ml_risk) fusion" ✅
+
+2. "How do you distinguish a single spike from a sustained outbreak trend?"
+   - **Current Answer:** "We don't have temporal features" ❌
+   - **Required Answer:** "We calculate 24h/7d deltas and growth rates" ✅
+
+3. "Do you consider existing alerts when predicting new outbreaks?"
+   - **Current Answer:** "No, alerts aren't in the feature set" ❌
+   - **Required Answer:** "Yes, active alert count is a key feature" ✅
+
+---
+
+### Top 3 Critical Issues
+
+#### **Issue #1: MISSING HYBRID FUSION ARCHITECTURE** 🔴
+
+**Problem:**
+- Rule-based WQI and ML predictions run independently
+- No `max(rule_risk, ml_risk)` fusion logic
+- Cannot combine threshold violations with ML predictions
+
+**Location:** `OutbreakPredictionService.storePredictionFromML()`
+
+**Fix (4 hours):**
+```java
+// Add to OutbreakPredictionService.storePredictionFromML()
+double ruleBasedRisk = calculateRuleBasedRisk(payload);
+double mlRisk = mlResult.get("risk_score");
+double finalRisk = Math.max(ruleBasedRisk, mlRisk);
+String finalLevel = determineRiskLevel(finalRisk);
+
+// Store finalRisk instead of mlRisk
+prediction.setRiskScore(finalRisk);
+prediction.setRiskLevel(finalLevel);
+```
+
+**Impact if Not Fixed:**
+- Judges will rate as "incomplete architecture"
+- System cannot leverage both rule-based and ML strengths
+- May miss outbreaks detected by rules but not ML (or vice versa)
+
+---
+
+#### **Issue #2: NO TEMPORAL TREND FEATURES** 🔴
+
+**Problem:**
+- No delta/rate-of-change calculation
+- No historical comparison (24h, 7d trends)
+- Cannot distinguish "single spike" vs "sustained trend"
+
+**Location:** `MLPayloadService.assembleMLPayload()`
+
+**Fix (6 hours):**
+```java
+// Add to MLPayloadService.assembleMLPayload()
+
+// Fetch historical data (24h ago, 7d ago)
+Map<String, Object> historical24h = getHistoricalData(24);
+Map<String, Object> historical7d = getHistoricalData(168);
+
+// Calculate deltas
+double wqiDelta24h = currentAvgWQI - historical24h.get("avg_wqi");
+double reportDelta24h = currentReports - historical24h.get("report_count");
+double clusterDelta7d = currentClusters - historical7d.get("cluster_count");
+
+// Add to payload
+payload.put("wqi_trend_24h", wqiDelta24h);
+payload.put("report_trend_24h", reportDelta24h);
+payload.put("cluster_growth_rate_7d", clusterDelta7d / 7.0);
+```
+
+**Impact if Not Fixed:**
+- False alarms from isolated events
+- Cannot detect gradual deterioration
+- Judges will question "How do you handle noise?"
+
+---
+
+#### **Issue #3: MISSING ACTIVE ALERTS INPUT** 🟡
+
+**Problem:**
+- Active alerts count NOT extracted as ML feature
+- System ignores existing alert context
+
+**Location:** `MLPayloadService.assembleMLPayload()`
+
+**Fix (2 hours):**
+```java
+// Add to MLPayloadService.assembleMLPayload()
+int activeAlerts = alertService.getActiveAlerts().size();
+int criticalAlerts = alertService.getActiveAlertsBySeverity("CRITICAL").size();
+
+payload.put("active_alerts", activeAlerts);
+payload.put("critical_alerts", criticalAlerts);
+```
+
+**Impact if Not Fixed:**
+- Incomplete risk assessment
+- Judges will ask "Why aren't alerts considered?"
+
+---
+
+### Implementation Priority
+
+**For SIH Demo (2-3 days):**
+
+1. **Day 1 (8 hours):**
+   - Morning: Implement hybrid fusion logic (4h)
+   - Afternoon: Add temporal trend features (4h)
+
+2. **Day 2 (6 hours):**
+   - Morning: Complete trend feature integration (2h)
+   - Afternoon: Include active alerts input (2h)
+   - Evening: Test behavior consistency (2h)
+
+3. **Day 3 (4 hours):**
+   - Morning: Integration testing (2h)
+   - Afternoon: Documentation update (2h)
+
+**Total Effort:** 18 hours (2-3 days)
+
+---
+
+### Recommendation
+
+**Current State:**
+- ✅ **Demo Ready** - Works for basic demonstrations
+- ⚠️ **Not Production Ready** - Missing critical architecture components
+
+**For SIH Judging:**
+- **Without Fixes:** Expect "prototype-level" rating, vulnerable to architecture questions
+- **With Fixes:** Strong "production-ready" rating, can confidently answer all questions
+
+**Decision:**
+- If time permits (2-3 days): **Implement all fixes** for maximum score
+- If time limited (<2 days): **Focus on fusion logic only** (Issue #1) - most critical
+
+**Final Verdict:** ⚠️ **NEEDS FIX BEFORE DEMO** for production-ready rating.
+
+---
+
+**Report Generated:** December 3, 2025  
+**Reviewer:** ML Pipeline Analysis System  
+**Next Review:** After implementing priority fixes

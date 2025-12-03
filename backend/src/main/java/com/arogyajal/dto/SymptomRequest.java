@@ -1,13 +1,10 @@
 package com.arogyajal.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.arogyajal.config.LocationDeserializer;
 import com.arogyajal.config.SeverityDeserializer;
-import com.google.cloud.firestore.GeoPoint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Pattern;

@@ -23,6 +23,45 @@ public class SymptomService {
         this.alertService = alertService;
     }
     
+    public SymptomReport saveSymptomReportDirect(SymptomReport report) {
+        log.info("Saving symptom report directly: {}", report.getId());
+        
+        try {
+            // Set timestamps if not provided
+            if (report.getReportedAt() == null) {
+                report.setReportedAt(Timestamp.now());
+            }
+            if (report.getOfflineCreatedAt() == null) {
+                report.setOfflineCreatedAt(Timestamp.now());
+            }
+            
+            // Set default status if not provided
+            if (report.getStatus() == null) {
+                report.setStatus("PENDING");
+            }
+            if (report.getSyncStatus() == null) {
+                report.setSyncStatus("SYNCED");
+            }
+            
+            SymptomReport savedReport = symptomRepository.save(report);
+            
+            // Check for symptom clusters after saving
+            try {
+                if (report.getLocation() != null) {
+                    alertService.checkForSymptomClusterAlerts(report.getLocation());
+                    alertService.checkForSymptomSpikeAlerts(report.getLocation());
+                }
+            } catch (Exception e) {
+                log.error("Error checking for symptom alerts: {}", e.getMessage());
+            }
+            
+            return savedReport;
+        } catch (Exception e) {
+            log.error("Error saving symptom report directly: {}", report.getId(), e);
+            throw new RuntimeException("Failed to save symptom report", e);
+        }
+    }
+    
     public SymptomReport saveSymptomReport(SymptomRequest request) {
         log.info("Saving symptom report for user ID: {}", request.getUserId());
         

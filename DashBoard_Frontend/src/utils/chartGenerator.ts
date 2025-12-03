@@ -209,9 +209,9 @@ export const generateFactorBarChart = (
  * Generate a risk gauge chart
  */
 export const generateRiskGauge = (
-  riskScore: number,
+  riskScore: number | null,
   riskLevel: string,
-  confidence: number,
+  confidence: number | null,
   width: number = 400,
   height: number = 300
 ): string => {
@@ -231,6 +231,26 @@ export const generateRiskGauge = (
   const centerX = width / 2;
   const centerY = height / 2 + 20;
   const radius = Math.min(width, height) / 3;
+
+  // Handle DATA_UNAVAILABLE or null values
+  if (riskScore === null || confidence === null || riskLevel === 'DATA_UNAVAILABLE') {
+    // Draw a simple message for unavailable data
+    ctx.fillStyle = '#6b7280';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('DATA UNAVAILABLE', centerX, centerY - 20);
+    
+    ctx.font = '16px Arial';
+    ctx.fillText('Insufficient sensor data', centerX, centerY + 10);
+    ctx.fillText('for risk assessment', centerX, centerY + 35);
+    
+    // Draw title
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText('Outbreak Risk Score', centerX, 30);
+    
+    return canvas.toDataURL('image/png');
+  }
 
   // Draw gauge background
   ctx.strokeStyle = '#e5e7eb';

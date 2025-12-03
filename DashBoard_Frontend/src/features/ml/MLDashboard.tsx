@@ -41,6 +41,8 @@ const MLDashboard: React.FC = () => {
     activeAlerts: 0
   });
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const handleDownloadReport = async () => {
     await downloadReport({
@@ -49,6 +51,40 @@ const MLDashboard: React.FC = () => {
       city: filter.city || undefined,
       village: filter.village || undefined
     });
+  };
+
+  const handleMLSync = async () => {
+    setIsSyncing(true);
+    setSyncMessage(null);
+    
+    try {
+      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
+      const response = await fetch(`${API_BASE}/api/ml/sync/trigger`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSyncMessage('✅ ML sync completed successfully!');
+        console.log('ML Sync Stats:', data.sync_stats);
+        
+        // Refresh dashboard data after sync
+        setTimeout(() => {
+          fetchDashboardData();
+          setSyncMessage(null);
+        }, 2000);
+      } else {
+        setSyncMessage('❌ ML sync failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('ML sync error:', error);
+      setSyncMessage('❌ ML sync failed. Check if backend is running.');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const fetchDashboardData = useCallback(async () => {
@@ -199,46 +235,37 @@ const MLDashboard: React.FC = () => {
               🗺️ Covering: Assam • Meghalaya • Arunachal Pradesh • Nagaland • Manipur • Mizoram • Tripura • Sikkim
             </p>
           </div>
-          <button
-            onClick={handleDownloadReport}
-            disabled={isGenerating}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: isGenerating ? '#9ca3af' : '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: isGenerating ? 'not-allowed' : 'pointer',
-              fontSize: '14px',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              if (!isGenerating) {
-                e.currentTarget.style.backgroundColor = '#2563eb';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isGenerating) {
-                e.currentTarget.style.backgroundColor = '#3b82f6';
-              }
-            }}
-          >
-            {isGenerating ? (
-              <>
-                <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>
-                Generating PDF with charts… please wait
-              </>
-            ) : (
-              <>
-                📄 Download Report
-              </>
-            )}
-          </button>
+
         </div>
+        {syncMessage && (
+          <div style={{
+            marginTop: '10px',
+            padding: '10px 15px',
+            backgroundColor: syncMessage.includes('✅') ? '#d1fae5' : '#fee2e2',
+            border: `1px solid ${syncMessage.includes('✅') ? '#a7f3d0' : '#fecaca'}`,
+            borderRadius: '6px',
+            color: syncMessage.includes('✅') ? '#065f46' : '#991b1b',
+            fontSize: '14px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
+          }}>
+            <span>{syncMessage}</span>
+            <button
+              onClick={() => setSyncMessage(null)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: syncMessage.includes('✅') ? '#065f46' : '#991b1b',
+                cursor: 'pointer',
+                fontSize: '18px',
+                padding: '0 5px'
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
         {error && (
           <div style={{
             marginTop: '10px',
@@ -367,13 +394,29 @@ const MLDashboard: React.FC = () => {
           <div className="quick-actions">
             <h3>Quick Actions</h3>
             <div className="actions-grid">
-              <button className="action-btn primary">
-                <span>🔄</span>
-                Run ML Clustering
+              <button 
+                className="action-btn primary"
+                onClick={handleMLSync}
+                disabled={isSyncing}
+                style={{
+                  opacity: isSyncing ? 0.6 : 1,
+                  cursor: isSyncing ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <span>{isSyncing ? '⏳' : '🔄'}</span>
+                {isSyncing ? 'Syncing ML...' : 'Sync ML Now'}
               </button>
-              <button className="action-btn">
-                <span>📊</span>
-                Generate Report
+              <button 
+                className="action-btn"
+                onClick={handleDownloadReport}
+                disabled={isGenerating}
+                style={{
+                  opacity: isGenerating ? 0.6 : 1,
+                  cursor: isGenerating ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <span>{isGenerating ? '⏳' : '📊'}</span>
+                {isGenerating ? 'Generating...' : 'Download Report'}
               </button>
               <button className="action-btn">
                 <span>🔔</span>

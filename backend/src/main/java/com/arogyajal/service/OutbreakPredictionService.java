@@ -209,25 +209,79 @@ public class OutbreakPredictionService {
     }
 
     /**
-     * Store prediction from ML service response with location context
+     * Store prediction from ML service response with HYBRID FUSION logic
+     * Combines rule-based risk (from WQI thresholds) with ML risk
      */
-    public void storePredictionFromML(Map<String, Object> mlResult, String location) {
+    public void storePredictionFromML(Map<String, Object> mlResult, String location, Map<String, Object> payload) {
         try {
-            // Extract values from ML response
+            // ========================================
+            // STEP 1: Extract ML prediction
+            // ========================================
             Object riskScoreObj = mlResult.get("risk_score");
             Object riskLevelObj = mlResult.get("risk_level");
             Object confidenceObj = mlResult.get("confidence");
-            Object factorsObj = mlResult.get("factors");
+            Object factorsObj = mlResult.get("contributing_factors");
             Object recommendationsObj = mlResult.get("recommendations");
             
-            double riskScore = riskScoreObj instanceof Number ? 
+            double mlRiskScore = riskScoreObj instanceof Number ? 
                 ((Number) riskScoreObj).doubleValue() : 0.0;
-            String riskLevel = riskLevelObj != null ? riskLevelObj.toString() : "UNKNOWN";
-            double confidence = confidenceObj instanceof Number ? 
+            String mlRiskLevel = riskLevelObj != null ? riskLevelObj.toString() : "UNKNOWN";
+            double mlConfidence = confidenceObj instanceof Number ? 
                 ((Number) confidenceObj).doubleValue() : 0.0;
             
-            // Convert factors from Map<String, Object> to Map<String, Double>
+            log.info("📊 ML Prediction: risk={:.1f}, level={}, confidence={:.1f}%", 
+                    mlRiskScore, mlRiskLevel, mlConfidence);
+            
+            // ========================================
+            // STEP 2: Calculate rule-based risk
+            // ========================================
+            double ruleRiskScore = 0.0;
+            String ruleRiskLevel = "LOW";
+            
+            try {
+                // Extract sensor data from payload
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> sensorData = (List<Map<String, Object>>) payload.get("sensors");
+                
+                if (sensorData != null && !sensorData.isEmpty()) {
+                    ruleRiskScore = com.arogyajal.util.RuleBasedRiskCalculator.calculateRuleBasedRisk(sensorData);
+                    ruleRiskLevel = com.arogyajal.util.RuleBasedRiskCalculator.determineRiskLevel(ruleRiskScore);
+                    
+                    log.info("📏 Rule-based Risk: risk={:.1f}, level={}", ruleRiskScore, ruleRiskLevel);
+                } else {
+                    log.warn("⚠️ No sensor data available for rule-based risk calculation");
+                }
+            } catch (Exception e) {
+                log.error("❌ Error calculating rule-based risk: {}", e.getMessage());
+            }
+            
+            // ========================================
+            // STEP 3: HYBRID FUSION - Take maximum
+            // ========================================
+            double finalRiskScore = Math.max(mlRiskScore, ruleRiskScore);
+            String finalRiskLevel = com.arogyajal.util.RuleBasedRiskCalculator.determineRiskLevel(finalRiskScore);
+            
+            log.info("🔀 FUSION: ML={:.1f}, Rule={:.1f} → Final={:.1f} ({})", 
+                    mlRiskScore, ruleRiskScore, finalRiskScore, finalRiskLevel);
+            
+            // ========================================
+            // STEP 4: Adjust confidence based on fusion
+            // ========================================
+            double finalConfidence = mlConfidence;
+            
+            // If rule-based risk is significantly higher, reduce confidence slightly
+            if (ruleRiskScore > mlRiskScore + 20) {
+                finalConfidence = Math.max(mlConfidence * 0.9, 50.0);
+                log.info("⚠️ Rule-based risk much higher than ML, confidence adjusted: {:.1f}% → {:.1f}%",
+                        mlConfidence, finalConfidence);
+            }
+            
+            // ========================================
+            // STEP 5: Build contributing factors with fusion metadata
+            // ========================================
             Map<String, Double> factors = new HashMap<>();
+            
+            // Add ML factors
             if (factorsObj instanceof Map) {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> factorsMap = (Map<String, Object>) factorsObj;
@@ -238,7 +292,15 @@ public class OutbreakPredictionService {
                 }
             }
             
-            // Extract recommendations from ML response
+            // Add fusion metadata
+            factors.put("ml_risk_score", mlRiskScore);
+            factors.put("rule_risk_score", ruleRiskScore);
+            factors.put("final_risk_score", finalRiskScore);
+            factors.put("fusion_method", 1.0); // 1.0 = max fusion
+            
+            // ========================================
+            // STEP 6: Extract recommendations
+            // ========================================
             List<String> recommendations = new ArrayList<>();
             if (recommendationsObj instanceof List) {
                 @SuppressWarnings("unchecked")
@@ -259,19 +321,26 @@ public class OutbreakPredictionService {
                 );
             }
             
-            // Build prediction object with unique ID
+            // Add fusion-specific recommendation if rule-based risk is high
+            if (ruleRiskScore >= 60 && ruleRiskScore > mlRiskScore) {
+                recommendations.add(0, "⚠️ PRIORITY: Water quality thresholds exceeded - immediate testing required");
+            }
+            
+            // ========================================
+            // STEP 7: Build and store fused prediction
+            // ========================================
             String predictionId = "pred_" + location.replaceAll("[^a-zA-Z0-9]", "_") + "_" + System.currentTimeMillis();
             
             OutbreakPrediction prediction = OutbreakPrediction.builder()
                 .id(predictionId)
                 .location(location)
-                .riskScore(riskScore)
-                .riskLevel(riskLevel)
-                .confidence(confidence)
-                .contributingFactors(factors)
+                .riskScore(finalRiskScore)  // ✅ FUSED RISK
+                .riskLevel(finalRiskLevel)  // ✅ FUSED LEVEL
+                .confidence(finalConfidence) // ✅ ADJUSTED CONFIDENCE
+                .contributingFactors(factors) // ✅ INCLUDES FUSION METADATA
                 .recommendedActions(recommendations)
                 .status("ACTIVE")
-                .modelVersion("1.1.0")
+                .modelVersion("1.2.0-FUSION") // Updated version
                 .predictionHorizon(7)
                 .predictedDate(com.google.cloud.Timestamp.now())
                 .build();
@@ -279,13 +348,23 @@ public class OutbreakPredictionService {
             // Save to Firestore
             createPrediction(prediction);
             
-            log.info("✅ Stored ML prediction for {}: Risk={} ({}), Confidence={}%",
-                       location, riskScore, riskLevel, confidence);
+            log.info("✅ Stored FUSED prediction for {}: Final Risk={:.1f} ({}), Confidence={:.1f}% [ML={:.1f}, Rule={:.1f}]",
+                       location, finalRiskScore, finalRiskLevel, finalConfidence, mlRiskScore, ruleRiskScore);
             
         } catch (Exception e) {
-            log.error("❌ Error storing ML prediction for {}: {}", location, e.getMessage(), e);
-            throw new RuntimeException("Failed to store ML prediction", e);
+            log.error("❌ Error storing fused prediction for {}: {}", location, e.getMessage(), e);
+            throw new RuntimeException("Failed to store fused prediction", e);
         }
+    }
+    
+    /**
+     * DEPRECATED: Old method without fusion - kept for backward compatibility
+     * Use storePredictionFromML(mlResult, location, payload) instead
+     */
+    @Deprecated
+    public void storePredictionFromML(Map<String, Object> mlResult, String location) {
+        log.warn("⚠️ Using deprecated storePredictionFromML without payload - fusion logic will not work");
+        storePredictionFromML(mlResult, location, new HashMap<>());
     }
 
     /**

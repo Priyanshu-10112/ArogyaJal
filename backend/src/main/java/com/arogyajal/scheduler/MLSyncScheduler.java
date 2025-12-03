@@ -113,11 +113,13 @@ public class MLSyncScheduler {
                 }
                 lastRiskScore = riskScore;
                 
-                // 4. Store prediction in Firestore with location
+                // 4. Store prediction in Firestore with FUSION logic
                 // Extract dominant location from payload (highest risk area)
                 String location = extractDominantLocation(payload);
-                predictionService.storePredictionFromML(mlResult, location);
-                logger.info("💾 Prediction stored successfully for location: {}", location);
+                
+                // ✅ PASS PAYLOAD FOR FUSION LOGIC
+                predictionService.storePredictionFromML(mlResult, location, payload);
+                logger.info("💾 FUSED prediction stored successfully for location: {}", location);
                 
                 // Reset failure count on success
                 failureCount = 0;

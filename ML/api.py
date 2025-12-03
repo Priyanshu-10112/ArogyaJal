@@ -488,7 +488,7 @@ def perform_symptom_clustering(df):
     return result_clusters
 
 def extract_outbreak_features(data):
-    """Extract features for outbreak prediction with severity consideration."""
+    """Extract features for outbreak prediction with severity and TREND consideration."""
     # Check if data contains list structures (new format) or direct values (old format)
     symptom_clusters_data = data.get('symptom_clusters', [])
     
@@ -520,7 +520,16 @@ def extract_outbreak_features(data):
             'water_quality_score': 0,
             'temporal_trend': 0,
             'poor_sensors': 0,
-            'total_sensors': 0
+            'total_sensors': 0,
+            # ✅ NEW: Trend features
+            'wqi_trend_24h': 0.0,
+            'report_trend_24h': 0.0,
+            'alert_trend_24h': 0.0,
+            'cluster_growth_rate_7d': 0.0,
+            'trend_direction': 'STABLE',
+            'has_trend_data': False,
+            # ✅ NEW: Active alerts
+            'active_alerts_24h': 0
         }
         
         # Find maximum cluster severity
@@ -540,6 +549,23 @@ def extract_outbreak_features(data):
             poor_sensors = sum(1 for s in sensor_data if s.get('wqi', 0) > 75)
             features['poor_sensors'] = poor_sensors
             features['water_quality_score'] = (poor_sensors / len(sensor_data)) * 100 if sensor_data else 0
+        
+        # ✅ NEW: Extract trend features
+        features['wqi_trend_24h'] = data.get('wqi_trend_24h', 0.0)
+        features['report_trend_24h'] = data.get('report_trend_24h', 0.0)
+        features['alert_trend_24h'] = data.get('alert_trend_24h', 0.0)
+        features['cluster_growth_rate_7d'] = data.get('cluster_growth_rate_7d', 0.0)
+        features['trend_direction'] = data.get('trend_direction', 'STABLE')
+        features['has_trend_data'] = data.get('has_trend_data', False)
+        
+        # ✅ NEW: Extract active alerts
+        features['active_alerts_24h'] = data.get('active_alerts_24h', 0)
+        
+        if features['has_trend_data']:
+            logger.info(f"📈 Trend Features: WQI Δ{features['wqi_trend_24h']:.1f}, "
+                       f"Reports Δ{features['report_trend_24h']:.0f}, "
+                       f"Alerts Δ{features['alert_trend_24h']:.0f}, "
+                       f"Direction: {features['trend_direction']}")
     
     return features
 
@@ -590,8 +616,77 @@ def predict_outbreak_probability(features):
         source_score = 0
     risk_score += source_score
     
-    logger.info(f"📊 Risk Calculation: Cluster={cluster_score:.1f}, Report={report_score:.1f}, "
-                f"Quality={quality_score:.1f}, Source={source_score:.1f}, Total={risk_score:.1f}")
+    # ✅ NEW: Alert Factor (0-10 points) - Active alerts
+    active_alerts = features.get('active_alerts_24h', 0)
+    alert_score = min(active_alerts * 2, 10)  # 2 points per alert, max 10
+    risk_score += alert_score
+    
+    logger.info(f"📊 Base Risk: Cluster={cluster_score:.1f}, Report={report_score:.1f}, "
+                f"Quality={quality_score:.1f}, Source={source_score:.1f}, Alert={alert_score:.1f}, "
+                f"Total={risk_score:.1f}")
+    
+    # ✅ NEW: Apply trend multipliers for temporal intelligence
+    base_risk = risk_score
+    trend_multiplier = 1.0
+    trend_adjustments = []
+    
+    if features.get('has_trend_data', False):
+        wqi_trend = features.get('wqi_trend_24h', 0)
+        report_trend = features.get('report_trend_24h', 0)
+        alert_trend = features.get('alert_trend_24h', 0)
+        cluster_growth = features.get('cluster_growth_rate_7d', 0)
+        
+        # Rapid WQI deterioration (worsening water quality)
+        if wqi_trend > 15:
+            trend_multiplier *= 1.4
+            trend_adjustments.append(f"Rapid WQI deterioration (+{wqi_trend:.1f})")
+        elif wqi_trend > 10:
+            trend_multiplier *= 1.3
+            trend_adjustments.append(f"WQI deteriorating (+{wqi_trend:.1f})")
+        
+        # Spike in reports
+        if report_trend > 10:
+            trend_multiplier *= 1.3
+            trend_adjustments.append(f"Report spike (+{report_trend:.0f})")
+        elif report_trend > 5:
+            trend_multiplier *= 1.2
+            trend_adjustments.append(f"Reports increasing (+{report_trend:.0f})")
+        
+        # Alert trend
+        if alert_trend > 5:
+            trend_multiplier *= 1.2
+            trend_adjustments.append(f"Alert surge (+{alert_trend:.0f})")
+        elif alert_trend > 3:
+            trend_multiplier *= 1.1
+            trend_adjustments.append(f"Alerts rising (+{alert_trend:.0f})")
+        
+        # Sustained cluster growth
+        if cluster_growth > 1.0:
+            trend_multiplier *= 1.5
+            trend_adjustments.append(f"Sustained cluster growth ({cluster_growth:.2f}/day)")
+        elif cluster_growth > 0.5:
+            trend_multiplier *= 1.3
+            trend_adjustments.append(f"Cluster growth ({cluster_growth:.2f}/day)")
+        
+        # Improving trends (reduce risk)
+        if wqi_trend < -10 and report_trend < -5:
+            trend_multiplier *= 0.7
+            trend_adjustments.append("Improving conditions")
+        elif wqi_trend < -5 and report_trend < 0:
+            trend_multiplier *= 0.85
+            trend_adjustments.append("Slight improvement")
+        
+        # Apply multiplier
+        risk_score = base_risk * trend_multiplier
+        
+        if trend_adjustments:
+            logger.info(f"📈 Trend Adjustments: {', '.join(trend_adjustments)}")
+            logger.info(f"📈 Trend Multiplier: {trend_multiplier:.2f}x → Risk: {base_risk:.1f} → {risk_score:.1f}")
+    else:
+        logger.info(f"⚠️ No trend data available - using base risk only")
+    
+    # Clamp to 0-100
+    risk_score = min(max(risk_score, 0), 100)
     
     # Determine risk level (as per documentation)
     if risk_score >= 75:
@@ -606,8 +701,16 @@ def predict_outbreak_probability(features):
     # Calculate confidence based on data completeness (as per documentation)
     confidence = calculate_prediction_confidence(features)
     
-    # Log significant risk changes
+    # Adjust confidence based on trend data availability
+    if features.get('has_trend_data', False):
+        confidence = min(confidence * 1.1, 100)  # Boost confidence with trend data
+    else:
+        confidence = max(confidence * 0.9, 40)  # Reduce confidence without trends
+    
+    # Log final result
     logger.info(f"🎯 Outbreak Risk: {risk_level} ({risk_score:.1f}/100) - Confidence: {confidence:.1f}%")
+    if trend_adjustments:
+        logger.info(f"🎯 Trend-Enhanced: Base {base_risk:.1f} × {trend_multiplier:.2f} = {risk_score:.1f}")
     
     return {
         'risk_score': risk_score,
@@ -617,7 +720,14 @@ def predict_outbreak_probability(features):
             'cluster_factor': cluster_score,
             'report_factor': report_score,
             'quality_factor': quality_score,
-            'source_factor': source_score
+            'source_factor': source_score,
+            'alert_factor': alert_score
+        },
+        'trend_analysis': {
+            'base_risk': base_risk,
+            'trend_multiplier': trend_multiplier,
+            'adjustments': trend_adjustments,
+            'has_trend_data': features.get('has_trend_data', False)
         }
     }
 

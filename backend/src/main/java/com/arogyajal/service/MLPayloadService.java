@@ -23,11 +23,19 @@ public class MLPayloadService {
     private final SensorService sensorService;
     private final SymptomService symptomService;
     private final SymptomClusterService clusterService;
+    private final HistoricalDataService historicalDataService;
+    private final AlertService alertService;
     
-    public MLPayloadService(SensorService sensorService, SymptomService symptomService, SymptomClusterService clusterService) {
+    public MLPayloadService(SensorService sensorService, 
+                           SymptomService symptomService, 
+                           SymptomClusterService clusterService,
+                           HistoricalDataService historicalDataService,
+                           AlertService alertService) {
         this.sensorService = sensorService;
         this.symptomService = symptomService;
         this.clusterService = clusterService;
+        this.historicalDataService = historicalDataService;
+        this.alertService = alertService;
     }
     
     /**
@@ -80,14 +88,60 @@ public class MLPayloadService {
             payload.put("symptom_clusters", symptomClusters);
             payload.put("cluster_count", symptomClusters.size());
             
-            // 7. Add metadata
+            // 7. Calculate current metrics for trend analysis
+            double currentAvgWQI = sensorData.stream()
+                .mapToDouble(s -> {
+                    Object wqiObj = s.get("wqi");
+                    return wqiObj instanceof Number ? ((Number) wqiObj).doubleValue() : 0.0;
+                })
+                .average()
+                .orElse(0.0);
+            
+            int currentReports24h = symptomData.size();
+            int currentClusters = symptomClusters.size();
+            
+            // 8. Get active alerts count (NEW FEATURE)
+            int activeAlerts24h = 0;
+            try {
+                activeAlerts24h = (int) alertService.getAllAlerts().stream()
+                    .filter(a -> "ACTIVE".equals(a.getStatus()))
+                    .count();
+                logger.info("🚨 Active alerts: {}", activeAlerts24h);
+            } catch (Exception e) {
+                logger.warn("⚠️ Could not fetch active alerts: {}", e.getMessage());
+            }
+            
+            payload.put("active_alerts_24h", activeAlerts24h);
+            
+            // 9. Calculate temporal trends (NEW FEATURE)
+            HistoricalDataService.TrendData trends = historicalDataService.calculateTrends(
+                currentAvgWQI,
+                currentReports24h,
+                activeAlerts24h,
+                currentClusters
+            );
+            
+            // Add trend features to payload
+            payload.put("wqi_trend_24h", trends.wqiTrend24h);
+            payload.put("report_trend_24h", trends.reportTrend24h);
+            payload.put("alert_trend_24h", trends.alertTrend24h);
+            payload.put("cluster_growth_rate_7d", trends.clusterGrowthRate7d);
+            payload.put("trend_direction", trends.trendDirection);
+            payload.put("has_trend_data", trends.hasTrendData);
+            
+            logger.info("📈 Trends: WQI Δ{:.1f}, Reports Δ{}, Alerts Δ{}, Direction: {}",
+                       trends.wqiTrend24h, (int)trends.reportTrend24h, (int)trends.alertTrend24h, trends.trendDirection);
+            
+            // 10. Add metadata
             payload.put("timestamp", LocalDateTime.now().toString());
             payload.put("region", "North East India");
-            payload.put("data_recency_hours", 24); // Assume recent data
-            payload.put("geographic_coverage", 0.8); // 80% coverage estimate
+            payload.put("data_recency_hours", 24);
+            payload.put("geographic_coverage", 0.8);
+            payload.put("current_avg_wqi", currentAvgWQI);
             
-            logger.info("✅ Payload assembled: {} sensors ({} poor), {} reports, {} clusters",
-                       sensorData.size(), poorSensors, symptomData.size(), symptomClusters.size());
+            logger.info("✅ Payload assembled: {} sensors ({} poor), {} reports, {} clusters, {} alerts, trend: {}",
+                       sensorData.size(), poorSensors, symptomData.size(), symptomClusters.size(), 
+                       activeAlerts24h, trends.trendDirection);
             
         } catch (Exception e) {
             logger.error("❌ Error assembling ML payload: {}", e.getMessage(), e);

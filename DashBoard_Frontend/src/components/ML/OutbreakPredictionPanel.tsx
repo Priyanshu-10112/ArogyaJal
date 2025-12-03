@@ -11,8 +11,14 @@ interface OutbreakPrediction {
     report_factor: number;
     quality_factor: number;
     water_factor: number;
+    // Fusion metadata
+    ml_risk_score?: number;
+    rule_risk_score?: number;
+    final_risk_score?: number;
+    fusion_method?: number;
   };
   recommendations: string[];
+  modelVersion?: string;
 }
 
 const OutbreakPredictionPanel: React.FC = () => {
@@ -39,15 +45,21 @@ const OutbreakPredictionPanel: React.FC = () => {
         // Transform backend response to match frontend interface
         const transformedData: OutbreakPrediction = {
           riskScore: data.risk_score || 0,
-          riskLevel: data.risk_level || data.outbreak_risk || 'LOW',  // Fixed: use risk_level first
+          riskLevel: data.risk_level || data.outbreak_risk || 'LOW',
           confidence: data.confidence || 0,
           contributingFactors: {
             cluster_factor: data.contributing_factors?.cluster_factor || data.risk_factors?.cluster_factor || 0,
             report_factor: data.contributing_factors?.report_factor || data.risk_factors?.report_factor || 0,
             quality_factor: data.contributing_factors?.quality_factor || data.risk_factors?.quality_factor || 0,
-            water_factor: data.contributing_factors?.water_factor || data.risk_factors?.water_factor || 0
+            water_factor: data.contributing_factors?.water_factor || data.risk_factors?.water_factor || 0,
+            // ✅ FUSION METADATA
+            ml_risk_score: data.contributing_factors?.ml_risk_score,
+            rule_risk_score: data.contributing_factors?.rule_risk_score,
+            final_risk_score: data.contributing_factors?.final_risk_score,
+            fusion_method: data.contributing_factors?.fusion_method
           },
-          recommendations: data.recommendations || ['No specific recommendations at this time']
+          recommendations: data.recommendations || ['No specific recommendations at this time'],
+          modelVersion: data.model_version || 'Unknown'
         };
         
         console.log('Transformed prediction:', transformedData);
@@ -107,6 +119,32 @@ const OutbreakPredictionPanel: React.FC = () => {
         <div className="confidence" style={{ margin: 0 }}>
           Confidence: {prediction.confidence.toFixed(0)}%
         </div>
+        
+        {/* ✅ FUSION INDICATOR */}
+        {prediction.contributingFactors.fusion_method === 1 && (
+          <div style={{ 
+            fontSize: '11px', 
+            color: '#6b7280', 
+            backgroundColor: '#f3f4f6', 
+            padding: '4px 8px', 
+            borderRadius: '4px',
+            marginTop: '4px'
+          }}>
+            🔀 Hybrid: ML ({prediction.contributingFactors.ml_risk_score?.toFixed(1)}) + 
+            Rule ({prediction.contributingFactors.rule_risk_score?.toFixed(1)})
+          </div>
+        )}
+        
+        {prediction.modelVersion && prediction.modelVersion.includes('FUSION') && (
+          <div style={{ 
+            fontSize: '10px', 
+            color: '#059669', 
+            fontWeight: 600,
+            marginTop: '2px'
+          }}>
+            ✓ Fusion-Enhanced Prediction
+          </div>
+        )}
       </div>
 
       {/* Contributing Factors */}
@@ -157,6 +195,61 @@ const OutbreakPredictionPanel: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Trend Analysis (if available) */}
+      {prediction.contributingFactors.ml_risk_score && prediction.contributingFactors.rule_risk_score && (
+        <div className="trend-analysis" style={{ padding: '16px 0', borderTop: '1px solid #f3f4f6' }}>
+          <h3 className="trend-title" style={{ marginBottom: '16px', paddingBottom: '8px', borderBottom: '1px solid #e5e7eb' }}>
+            Risk Analysis Breakdown
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div style={{ 
+              padding: '12px', 
+              backgroundColor: '#f9fafb', 
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>ML Risk Score</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#3b82f6' }}>
+                {prediction.contributingFactors.ml_risk_score.toFixed(1)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                Pattern-based prediction
+              </div>
+            </div>
+            <div style={{ 
+              padding: '12px', 
+              backgroundColor: '#f9fafb', 
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb'
+            }}>
+              <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Rule-Based Risk</div>
+              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#8b5cf6' }}>
+                {prediction.contributingFactors.rule_risk_score.toFixed(1)}
+              </div>
+              <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                Threshold-based assessment
+              </div>
+            </div>
+          </div>
+          <div style={{ 
+            marginTop: '12px', 
+            padding: '12px', 
+            backgroundColor: '#fef3c7', 
+            borderRadius: '8px',
+            border: '1px solid #fbbf24'
+          }}>
+            <div style={{ fontSize: '12px', color: '#92400e', fontWeight: 600, marginBottom: '4px' }}>
+              🔀 Fusion Result
+            </div>
+            <div style={{ fontSize: '14px', color: '#78350f' }}>
+              Final Risk: <strong>{prediction.riskScore.toFixed(1)}</strong> = max(
+              ML: {prediction.contributingFactors.ml_risk_score.toFixed(1)}, 
+              Rule: {prediction.contributingFactors.rule_risk_score.toFixed(1)})
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recommendations */}
       <div className="recommendations" style={{ padding: '16px 0', borderTop: '1px solid #f3f4f6' }}>

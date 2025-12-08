@@ -5,10 +5,12 @@ import { generatePDF } from '../utils/pdfGenerator';
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
 interface ReportFilters {
+  type?: string;
   state?: string;
   district?: string;
   city?: string;
   village?: string;
+  range?: string;
 }
 
 export const useReportDownload = () => {
@@ -24,11 +26,12 @@ export const useReportDownload = () => {
 
       // Build query params
       const params = new URLSearchParams();
+      if (filters.type) params.append('type', filters.type);
       if (filters.state) params.append('state', filters.state);
       if (filters.district) params.append('district', filters.district);
       if (filters.city) params.append('city', filters.city);
       if (filters.village) params.append('village', filters.village);
-      params.append('range', '24h');
+      params.append('range', filters.range || '24h');
 
       const url = `${API_BASE_URL}/api/report?${params.toString()}`;
       console.log('📡 Fetching report data from:', url);

@@ -35,16 +35,16 @@ public class RuleBasedRiskCalculator {
         // 1. Base risk from average WQI
         if (avgWQI >= 90) {
             baseRisk += 50; // Very Poor water quality
-            logger.info("🔴 Rule-based: Very Poor WQI ({}), base_risk += 50", avgWQI);
+            logger.info("🔴 Rule-based: Very Poor WQI ({}), base_risk += 50", String.format("%.1f", avgWQI));
         } else if (avgWQI >= 75) {
             baseRisk += 40; // Poor water quality
-            logger.info("🟠 Rule-based: Poor WQI ({}), base_risk += 40", avgWQI);
+            logger.info("🟠 Rule-based: Poor WQI ({}), base_risk += 40", String.format("%.1f", avgWQI));
         } else if (avgWQI >= 50) {
             baseRisk += 25; // Fair water quality
-            logger.info("🟡 Rule-based: Fair WQI ({}), base_risk += 25", avgWQI);
+            logger.info("🟡 Rule-based: Fair WQI ({}), base_risk += 25", String.format("%.1f", avgWQI));
         } else if (avgWQI >= 25) {
             baseRisk += 10; // Good water quality
-            logger.info("🟢 Rule-based: Good WQI ({}), base_risk += 10", avgWQI);
+            logger.info("🟢 Rule-based: Good WQI ({}), base_risk += 10", String.format("%.1f", avgWQI));
         }
         // Excellent (< 25) adds 0
         
@@ -53,8 +53,10 @@ public class RuleBasedRiskCalculator {
             double unsafeRatio = (double) poorSensorCount / totalSensors;
             double ratioRisk = unsafeRatio * 40; // Up to 40 points
             baseRisk += ratioRisk;
-            logger.info("📊 Rule-based: Poor sensor ratio {}/{} ({:.1f}%), risk += {:.1f}",
-                       poorSensorCount, totalSensors, unsafeRatio * 100, ratioRisk);
+            logger.info("📊 Rule-based: Poor sensor ratio {}/{} ({}%), risk += {}",
+                       poorSensorCount, totalSensors, 
+                       String.format("%.1f", unsafeRatio * 100), 
+                       String.format("%.1f", ratioRisk));
         }
         
         // 3. Critical breach override
@@ -66,8 +68,10 @@ public class RuleBasedRiskCalculator {
         // 4. Clamp to 0-100
         double finalRisk = Math.min(Math.max(baseRisk, 0), 100);
         
-        logger.info("🎯 Rule-based risk calculated: {:.1f} (avgWQI={:.1f}, poor={}/{}, critical={})",
-                   finalRisk, avgWQI, poorSensorCount, totalSensors, hasCriticalBreach);
+        logger.info("🎯 Rule-based risk calculated: {} (avgWQI={}, poor={}/{}, critical={})",
+                   String.format("%.1f", finalRisk), 
+                   String.format("%.1f", avgWQI), 
+                   poorSensorCount, totalSensors, hasCriticalBreach);
         
         return finalRisk;
     }
@@ -97,7 +101,9 @@ public class RuleBasedRiskCalculator {
                 totalWQI += wqi;
                 validCount++;
                 
-                if (wqi > 75) {
+                // Lowered threshold from 75 to 50 for better sensitivity
+                // Now counts Fair (51-75), Poor (76-90), and Very Poor (>90) as "poor"
+                if (wqi > 50) {
                     poorCount++;
                 }
                 if (wqi > 90) {

@@ -58,13 +58,14 @@ public class MLPayloadService {
             payload.put("symptom_reports", symptomData);
             payload.put("report_count", symptomData.size());
             
-            // 3. Calculate poor sensors count (WQI > 75)
+            // 3. Calculate poor sensors count (WQI > 50 = Fair or worse)
+            // Lowered threshold from 75 to 50 for better sensitivity
             long poorSensors = sensorData.stream()
                 .filter(s -> {
                     Object wqiObj = s.get("wqi");
                     if (wqiObj instanceof Number) {
                         double wqi = ((Number) wqiObj).doubleValue();
-                        return wqi > 75;
+                        return wqi > 50; // Fair (51-75), Poor (76-90), Very Poor (>90)
                     }
                     return false;
                 })
@@ -199,23 +200,26 @@ public class MLPayloadService {
         data.put("sensor_id", reading.getSensorId());
         data.put("location", reading.getLocation());
         
-        // Parameters
-        data.put("ph", reading.getPh());
-        data.put("temperature", reading.getTemperature());
-        data.put("turbidity", reading.getTurbidity());
-        data.put("tds", reading.getTotalDissolvedSolids());
+        // Parameters - convert 0.0 to null for proper WQI calculation
+        Double ph = (reading.getPh() != null && reading.getPh() > 0) ? reading.getPh() : null;
+        Double temperature = (reading.getTemperature() != null && reading.getTemperature() > 0) ? reading.getTemperature() : null;
+        Double turbidity = (reading.getTurbidity() != null && reading.getTurbidity() > 0) ? reading.getTurbidity() : null;
+        Double tds = (reading.getTotalDissolvedSolids() != null && reading.getTotalDissolvedSolids() > 0) ? reading.getTotalDissolvedSolids() : null;
         
-        // Calculate WQI using formula
-        double wqi = WQICalculator.calculateWQI(
-            reading.getPh(),
-            reading.getTurbidity(),
-            reading.getTotalDissolvedSolids(),
-            reading.getTemperature()
-        );
+        data.put("ph", ph);
+        data.put("temperature", temperature);
+        data.put("turbidity", turbidity);
+        data.put("tds", tds);
+        
+        // Calculate WQI using formula (will use defaults for null values)
+        double wqi = WQICalculator.calculateWQI(ph, turbidity, tds, temperature);
         
         data.put("wqi", wqi);
         data.put("quality_status", WQICalculator.getQualityClassification(wqi));
         data.put("severity", WQICalculator.getSeverityLevel(wqi));
+        
+        logger.debug("📊 Sensor {}: pH={}, Turb={}, TDS={}, Temp={} → WQI={:.1f}",
+                    reading.getSensorId(), ph, turbidity, tds, temperature, wqi);
         
         // Parse location to coordinates if available
         String location = reading.getLocation();

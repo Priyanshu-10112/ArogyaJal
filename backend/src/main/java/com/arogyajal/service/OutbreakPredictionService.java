@@ -243,16 +243,32 @@ public class OutbreakPredictionService {
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> sensorData = (List<Map<String, Object>>) payload.get("sensors");
                 
+                log.info("🔍 Payload keys: {}", payload.keySet());
+                log.info("🔍 Sensor data from payload: {} sensors", 
+                        sensorData != null ? sensorData.size() : "null");
+                
                 if (sensorData != null && !sensorData.isEmpty()) {
+                    // Log first sensor for debugging
+                    if (!sensorData.isEmpty()) {
+                        Map<String, Object> firstSensor = sensorData.get(0);
+                        log.info("🔍 First sensor: id={}, wqi={}, ph={}, turbidity={}, tds={}",
+                                firstSensor.get("sensor_id"),
+                                firstSensor.get("wqi"),
+                                firstSensor.get("ph"),
+                                firstSensor.get("turbidity"),
+                                firstSensor.get("tds"));
+                    }
+                    
                     ruleRiskScore = com.arogyajal.util.RuleBasedRiskCalculator.calculateRuleBasedRisk(sensorData);
                     ruleRiskLevel = com.arogyajal.util.RuleBasedRiskCalculator.determineRiskLevel(ruleRiskScore);
                     
                     log.info("📏 Rule-based Risk: risk={:.1f}, level={}", ruleRiskScore, ruleRiskLevel);
                 } else {
-                    log.warn("⚠️ No sensor data available for rule-based risk calculation");
+                    log.warn("⚠️ No sensor data available for rule-based risk calculation (payload has {} keys)",
+                            payload.size());
                 }
             } catch (Exception e) {
-                log.error("❌ Error calculating rule-based risk: {}", e.getMessage());
+                log.error("❌ Error calculating rule-based risk: {}", e.getMessage(), e);
             }
             
             // ========================================

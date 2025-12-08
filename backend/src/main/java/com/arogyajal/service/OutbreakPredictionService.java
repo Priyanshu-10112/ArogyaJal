@@ -207,6 +207,22 @@ public class OutbreakPredictionService {
             return null;
         }
     }
+    /**
+     * Get latest prediction for a specific location
+     */
+    public OutbreakPrediction getLatestPredictionByLocation(String location) {
+        try {
+            List<OutbreakPrediction> predictions = getAllPredictions();
+            return predictions.stream()
+                .filter(p -> p.getPredictedDate() != null && p.getLocation() != null)
+                .filter(p -> p.getLocation().toLowerCase().contains(location.toLowerCase()))
+                .sorted((a, b) -> b.getPredictedDate().compareTo(a.getPredictedDate()))
+                .findFirst().orElse(null);
+        } catch (Exception e) {
+            log.error("Error getting latest prediction for location: {}", location, e);
+            return null;
+        }
+    }
 
     /**
      * Store prediction from ML service response with HYBRID FUSION logic
@@ -583,3 +599,4 @@ public class OutbreakPredictionService {
         }
     }
 }
+

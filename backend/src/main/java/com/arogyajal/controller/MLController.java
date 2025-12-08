@@ -292,10 +292,27 @@ public class MLController {
      */
     @GetMapping("/outbreak-predictions/latest")
     @Operation(summary = "Get latest outbreak predictions", description = "Retrieve latest stored outbreak prediction from Firestore")
-    public ResponseEntity<Map<String, Object>> getLatestOutbreakPredictions() {
-        log.info("Fetching latest outbreak prediction from Firestore");
+    public ResponseEntity<Map<String, Object>> getLatestOutbreakPredictions(
+            @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "state", required = false) String state,
+            @RequestParam(value = "district", required = false) String district,
+            @RequestParam(value = "city", required = false) String city) {
+        
+        String filterLocation = location != null ? location : 
+                               (city != null ? city : 
+                               (district != null ? district : 
+                               (state != null ? state : null)));
+        
+        if (filterLocation != null) {
+            log.info("Fetching latest outbreak prediction for location: {}", filterLocation);
+        } else {
+            log.info("Fetching latest outbreak prediction from Firestore (all locations)");
+        }
+        
         try {
-            OutbreakPrediction latest = outbreakPredictionService.getLatestPrediction();
+            OutbreakPrediction latest = filterLocation != null ? 
+                outbreakPredictionService.getLatestPredictionByLocation(filterLocation) :
+                outbreakPredictionService.getLatestPrediction();
             if (latest == null) {
                 log.warn("No predictions found in Firestore, fetching from ML service");
                 return getOutbreakPredictions();

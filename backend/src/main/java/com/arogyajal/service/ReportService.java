@@ -88,16 +88,21 @@ public class ReportService {
         // Set dynamic messaging based on mode
         if (isFallbackMode && !readings.isEmpty()) {
             report.getMetadata().setDataModeMessage(
-                "⚠ No recent readings in the last " + hours + " hours for this region. " +
-                "Using latest available sensor values to avoid data blackout."
+                "⚠ No recent readings in the last " + hours + " hours. " +
+                "Using latest available sensor values (fallback mode) to provide current status."
             );
             report.getMetadata().setCoverageMessage(
-                "Coverage: " + reportingDevices.size() + " sensors (fallback mode)."
+                "Coverage: " + reportingDevices.size() + " sensors reporting (fallback mode - showing latest available data)."
             );
         } else if (!readings.isEmpty()) {
             report.getMetadata().setDataModeMessage(
                 "Out of " + report.getMetadata().getConfiguredDevices() + " sensors, " + 
                 reportingDevices.size() + " reported in the last " + hours + " hours."
+            );
+        } else {
+            report.getMetadata().setDataModeMessage(
+                "No sensor data available. All " + report.getMetadata().getConfiguredDevices() + 
+                " configured sensors are offline or not reporting."
             );
         }
         
@@ -222,19 +227,20 @@ public class ReportService {
     /**
      * Get latest available readings per sensor (FALLBACK MODE)
      * Used when no recent data exists in the specified time range
+     * 
+     * IMPORTANT: In fallback mode, we get ALL sensors regardless of location filter
+     * because sensors store coordinates (26.1445,91.7362) not text locations (Sawkuchi, Dispur)
+     * Location filtering should be done at device registry level, not sensor reading level
      */
     private List<SensorReading> getLatestAvailableReadings(String state, String district, String city, String village) {
         try {
-            // Get all readings (no time filter)
+            // Get all readings (no time filter, no location filter in fallback mode)
             List<SensorReading> allReadings = sensorRepository.findAll();
             
-            // Filter by location if specified
-            List<SensorReading> filteredReadings = allReadings.stream()
-                .filter(reading -> matchesLocation(reading, state, district, city, village))
-                .collect(Collectors.toList());
+            log.info("Fallback mode: Retrieved {} total readings from database", allReadings.size());
             
             // Group by sensor and get latest reading per sensor
-            Map<String, SensorReading> latestPerSensor = filteredReadings.stream()
+            Map<String, SensorReading> latestPerSensor = allReadings.stream()
                 .collect(Collectors.toMap(
                     SensorReading::getSensorId,
                     reading -> reading,
@@ -337,14 +343,28 @@ public class ReportService {
         try {
             List<SensorReading> allReadings = sensorRepository.findByTimestampBetween(startTime, endTime);
             
-            // Filter by location if specified
+            log.info("Found {} readings in time range {} to {}", allReadings.size(), startTime, endTime);
+            
+            // IMPORTANT: Sensors store coordinates (26.1445,91.7362) not text locations
+            // Location filtering by text name will fail. Return all readings for now.
+            // TODO: Implement geo-coordinate based filtering or device registry filtering
             if (state == null && district == null && city == null && village == null) {
                 return allReadings;
             }
             
-            return allReadings.stream()
+            // Try location matching but don't filter out if no matches
+            // This prevents empty reports when location format doesn't match
+            List<SensorReading> filtered = allReadings.stream()
                 .filter(reading -> matchesLocation(reading, state, district, city, village))
                 .collect(Collectors.toList());
+            
+            if (filtered.isEmpty() && !allReadings.isEmpty()) {
+                log.warn("Location filter '{}' matched 0 readings. Returning all {} readings to avoid empty report.",
+                        String.format("%s/%s/%s/%s", state, district, city, village), allReadings.size());
+                return allReadings;
+            }
+            
+            return filtered;
                 
         } catch (Exception e) {
             log.error("Error fetching filtered readings", e);

@@ -126,9 +126,11 @@ const DashboardUpdated: React.FC = () => {
                         {device.district}, {device.state}
                       </p>
                       <p><strong>Source:</strong> {device.waterSourceType}</p>
-                      <p className="coordinates">
-                        {device.lat.toFixed(4)}°N, {device.lon.toFixed(4)}°E
-                      </p>
+                      {device.lat && device.lon && (
+                        <p className="coordinates">
+                          {device.lat.toFixed(4)}°N, {device.lon.toFixed(4)}°E
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}

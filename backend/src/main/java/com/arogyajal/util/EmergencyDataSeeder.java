@@ -14,8 +14,9 @@ import java.util.Map;
 
 /**
  * Seeds emergency data to Firestore on application startup
+ * DISABLED: Causing quota exhaustion - enable only when needed
  */
-@Component
+// @Component  // DISABLED to prevent quota exhaustion
 public class EmergencyDataSeeder implements CommandLineRunner {
     
     private static final Logger log = LoggerFactory.getLogger(EmergencyDataSeeder.class);

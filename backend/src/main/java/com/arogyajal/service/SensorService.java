@@ -431,6 +431,7 @@ public class SensorService {
         }
     }
     
+
     /**
      * Get recent sensor readings
      * @param limit Maximum number of readings to return
@@ -594,6 +595,7 @@ public class SensorService {
         }
     }
     
+
     public long getTotalReadings() {
         try {
             return sensorRepository.count();

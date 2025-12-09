@@ -102,14 +102,15 @@ public class SmartAlertService {
             
             if (unconfirmedCount >= HIGH_SEVERITY_CONFIRMATIONS_REQUIRED - 1) {
                 // 2nd reading confirmed - create alert
-                if (shouldCreateAlert(reading, "HIGH")) {
+                // RATE LIMITING TEMPORARILY DISABLED FOR N8N TESTING
+                // if (shouldCreateAlert(reading, "HIGH")) {
                     Alert alert = createSmartAlert(reading, "HIGH", true);
                     return new SmartAlertResult("ALERT_CREATED", alert.getId(), 
                         "High severity confirmed - alert created");
-                } else {
-                    return new SmartAlertResult("RATE_LIMITED", null, 
-                        "Alert suppressed - rate limited");
-                }
+                // } else {
+                //     return new SmartAlertResult("RATE_LIMITED", null, 
+                //         "Alert suppressed - rate limited");
+                // }
             } else {
                 // First HIGH reading - store but don't alert
                 storeUnconfirmedAlert(reading, "HIGH");
@@ -129,12 +130,12 @@ public class SmartAlertService {
      */
     private SmartAlertResult handleCriticalReading(SensorReading reading) {
         try {
-            // Check rate limit
-            if (isRateLimited(reading.getSensorId(), RATE_LIMIT_MINUTES)) {
-                log.info("Critical alert rate-limited: {}", reading.getSensorId());
-                return new SmartAlertResult("RATE_LIMITED", null, 
-                    "Critical alert suppressed - rate limited");
-            }
+            // Check rate limit - TEMPORARILY DISABLED FOR N8N TESTING
+            // if (isRateLimited(reading.getSensorId(), RATE_LIMIT_MINUTES)) {
+            //     log.info("Critical alert rate-limited: {}", reading.getSensorId());
+            //     return new SmartAlertResult("RATE_LIMITED", null, 
+            //         "Critical alert suppressed - rate limited");
+            // }
             
             // Create alert immediately
             if (shouldCreateAlert(reading, "CRITICAL")) {

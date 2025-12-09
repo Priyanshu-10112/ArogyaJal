@@ -38,15 +38,15 @@ const WaterQualityA1: React.FC = () => {
 
             <div className="category-content">
                 <div className="devices-table-section">
-                    <h2>Monitoring Stations ({devices.length})</h2>
+                    <h2>Water Sources ({devices.length})</h2>
                     <table className="gov-table">
                         <thead>
                             <tr>
                                 <th>S.No.</th>
-                                <th>Device ID</th>
+                                <th>Source ID</th>
                                 <th>Location</th>
                                 <th>Source Type</th>
-                                <th>Status</th>
+                                <th>Operational Status</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -57,7 +57,11 @@ const WaterQualityA1: React.FC = () => {
                                     <td className="device-id-cell">{device.deviceId}</td>
                                     <td>{device.village}, {device.district}</td>
                                     <td>{device.waterSourceType}</td>
-                                    <td><span className="status-badge active">Active</span></td>
+                                    <td>
+                                        <span className={`status-badge ${device.verified ? 'active' : 'inactive'}`}>
+                                            {device.verified ? 'Functional' : 'Non-Functional'}
+                                        </span>
+                                    </td>
                                     <td>
                                         <button 
                                             className="view-btn"
@@ -77,7 +81,7 @@ const WaterQualityA1: React.FC = () => {
                 <div className="modal-overlay" onClick={() => setSelectedDevice(null)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2>Water Quality Details - {selectedDevice.deviceId}</h2>
+                            <h2>Water Quality Details — {selectedDevice.deviceId}</h2>
                             <button className="close-btn" onClick={() => setSelectedDevice(null)}>×</button>
                         </div>
                         <div className="modal-body">

@@ -1,89 +1,104 @@
+/* ============================================
+   GOVERNMENT SIDEBAR - IMPROVED DESIGN
+   ============================================ */
+
 .gov-sidebar {
     width: 280px;
-    background: #ffffff;
-    border-right: 1px solid #e0e0e0;
-    height: calc(100vh - 156px);
+    background: #FFFFFF;
+    border-right: 1px solid #E0E0E0;
+    height: calc(100vh - 100px);
     overflow-y: auto;
     position: fixed;
     left: 0;
-    top: 156px;
+    top: 100px;
     z-index: 900;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .gov-nav {
-    padding: 1rem 0;
+    padding: var(--spacing-lg) 0;
 }
 
+/* Navigation Section */
 .nav-section {
-    margin-bottom: 1.5rem;
+    margin-bottom: 24px;
 }
 
 .nav-section-title {
-    font-size: 0.75rem;
+    padding: 10px 20px;
+    margin: 0 0 8px 0;
+    font-size: 12px;
     font-weight: 700;
+    color: #000080;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    color: #666;
-    padding: 0.75rem 1.5rem 0.5rem;
-    margin: 0;
-    border-bottom: 1px solid #f0f0f0;
+    line-height: 1.4;
+    background: #F5F5F5;
+    border-left: 3px solid #FF9933;
+    font-family: 'Noto Sans', 'Noto Sans Devanagari', sans-serif;
 }
 
+/* Navigation Links */
 .gov-nav-link {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.875rem 1.5rem;
-    color: #333;
+    gap: 12px;
+    padding: 12px 20px;
+    color: #212121;
     text-decoration: none;
-    transition: all 0.2s ease;
+    transition: all 150ms;
     border-left: 3px solid transparent;
-    font-size: 0.95rem;
+    font-size: 14px;
+    font-weight: 500;
 }
 
 .gov-nav-link:hover {
-    background: #f8f9fa;
-    color: #000080;
-    border-left-color: #e0e0e0;
+    background: #E3F2FD;
+    border-left-color: #000080;
 }
 
 .gov-nav-link.active {
-    background: linear-gradient(to right, #e3f2fd 0%, #ffffff 100%);
-    color: #000080;
+    background: linear-gradient(to right, #E3F2FD 0%, #FFFFFF 100%);
     border-left-color: #000080;
     font-weight: 600;
+    color: #000080;
 }
 
-.gov-nav-link .nav-icon {
-    width: 20px;
-    text-align: center;
-    font-size: 1.1rem;
-    color: #0ea5e9;
+/* Navigation Icon */
+.nav-icon {
+    width: 18px;
+    height: 18px;
+    color: #000080;
+    flex-shrink: 0;
+}
+
+.gov-nav-link:hover .nav-icon {
+    color: #000066;
 }
 
 .gov-nav-link.active .nav-icon {
     color: #000080;
 }
 
-/* Scrollbar styling */
+/* Scrollbar Styling */
 .gov-sidebar::-webkit-scrollbar {
     width: 6px;
 }
 
 .gov-sidebar::-webkit-scrollbar-track {
-    background: #f0f0f0;
+    background: var(--gray-100);
 }
 
 .gov-sidebar::-webkit-scrollbar-thumb {
-    background: #ccc;
+    background: var(--color-border-dark);
     border-radius: 3px;
 }
 
 .gov-sidebar::-webkit-scrollbar-thumb:hover {
-    background: #999;
+    background: var(--gray-600);
 }
 
+/* Responsive Design */
 @media (max-width: 1024px) {
     .gov-sidebar {
         width: 240px;
@@ -92,13 +107,16 @@
     }
 
     .nav-section-title {
-        font-size: 0.7rem;
-        padding: 0.5rem 1rem 0.25rem;
+        padding: var(--spacing-xs) var(--spacing-md);
     }
 
     .gov-nav-link {
-        padding: 0.75rem 1rem;
-        font-size: 0.9rem;
+        padding: var(--spacing-sm) var(--spacing-md);
+        gap: var(--spacing-sm);
+    }
+
+    .link-hindi {
+        font-size: var(--font-size-small);
     }
 }
 
@@ -110,19 +128,51 @@
     }
 
     .nav-section-title {
+        padding: var(--spacing-xs);
+        text-align: center;
+    }
+
+    .title-hindi,
+    .title-english {
         display: none;
     }
 
-    .gov-nav-link span {
-        display: none;
+    .nav-section-title::before {
+        content: '━';
+        display: block;
+        color: var(--gov-saffron);
+        font-size: 16px;
     }
 
     .gov-nav-link {
         justify-content: center;
-        padding: 1rem 0.5rem;
+        padding: var(--spacing-md) var(--spacing-sm);
+        gap: 0;
     }
 
-    .gov-nav-link .nav-icon {
-        font-size: 1.25rem;
+    .link-text {
+        display: none;
+    }
+
+    .nav-icon {
+        width: 24px;
+        height: 24px;
+    }
+
+    .gov-nav-link.active::after {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .gov-sidebar {
+        width: 60px;
+        top: 100px;
+        height: calc(100vh - 100px);
+    }
+
+    .nav-icon {
+        width: 20px;
+        height: 20px;
     }
 }

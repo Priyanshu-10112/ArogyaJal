@@ -29,10 +29,8 @@ public class Alert {
     @ServerTimestamp
     private Timestamp triggeredAt;
     
-    @ServerTimestamp
     private Timestamp acknowledgedAt;
     
-    @ServerTimestamp
     private Timestamp resolvedAt;
     private String status; // ACTIVE, ACKNOWLEDGED, RESOLVED, DISMISSED
     private String notificationMethod; // EMAIL, SMS, PUSH, etc.

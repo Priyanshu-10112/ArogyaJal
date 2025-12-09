@@ -154,7 +154,7 @@ public class ReverseGeocodingService {
             registry.setDistrict(district);
             registry.setCityOrTown(cityOrTown);
             registry.setVillage(village);
-            registry.setWaterSourceType(null);
+            registry.setWaterSourceType(inferWaterSourceType(cityOrTown, village, root));
             registry.setVerified(false);
             registry.setNeedsVerification(needsVerification);
             registry.setGeoSource("NOMINATIM_OSM");
@@ -205,6 +205,63 @@ public class ReverseGeocodingService {
         registry.setCreatedAt(Timestamp.now());
         registry.setUpdatedAt(Timestamp.now());
         return registry;
+    }
+    
+    /**
+     * Infer water source type based on location characteristics
+     * Uses location name patterns and geographic features
+     */
+    private String inferWaterSourceType(String cityOrTown, String village, JsonNode root) {
+        try {
+            // Get display name and address for pattern matching
+            String displayName = root.get("display_name") != null ? 
+                root.get("display_name").asText().toLowerCase() : "";
+            JsonNode address = root.get("address");
+            
+            // Check for water body names in location
+            if (displayName.contains("river") || displayName.contains("nadi") || 
+                displayName.contains("ganga") || displayName.contains("brahmaputra")) {
+                return "RIVER";
+            }
+            
+            if (displayName.contains("pond") || displayName.contains("pokhar") || 
+                displayName.contains("talab")) {
+                return "POND";
+            }
+            
+            if (displayName.contains("spring") || displayName.contains("jharna")) {
+                return "SPRING";
+            }
+            
+            // Check address components for water features
+            if (address != null) {
+                JsonNode waterway = address.get("waterway");
+                if (waterway != null) {
+                    String waterwayType = waterway.asText().toLowerCase();
+                    if (waterwayType.contains("river") || waterwayType.contains("stream")) {
+                        return "RIVER";
+                    }
+                }
+            }
+            
+            // Infer based on location type
+            if (village != null && !village.isEmpty()) {
+                // Rural areas more likely to have wells or handpumps
+                return "HANDPUMP";
+            }
+            
+            if (cityOrTown != null && !cityOrTown.isEmpty()) {
+                // Urban areas more likely to have tap water
+                return "TAP";
+            }
+            
+            // Default fallback
+            return "WELL";
+            
+        } catch (Exception e) {
+            log.debug("Error inferring water source type: {}", e.getMessage());
+            return "WELL"; // Safe default
+        }
     }
     
     /**

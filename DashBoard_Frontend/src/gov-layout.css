@@ -38,14 +38,14 @@ body {
     background: #ffffff;
     border-bottom: 4px solid #FF9933;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    height: 156px;
+    height: 100px;
 }
 
 /* Government Sidebar - Fixed Left, Below Header */
 .gov-sidebar {
     position: fixed;
     left: 0;
-    top: 156px; /* Adjusted for new header height */
+    top: 100px; /* Adjusted for new header height */
     bottom: 0;
     width: 280px;
     background: white;
@@ -78,8 +78,8 @@ body {
 /* Main Content Area - Adjusted for Header and Sidebar */
 .main-content {
     margin-left: 280px;
-    margin-top: 156px; /* Adjusted for new header height */
-    min-height: calc(100vh - 156px);
+    margin-top: 100px; /* Adjusted for new header height */
+    min-height: calc(100vh - 100px);
     display: flex;
     flex-direction: column;
     background: #f8fafc;

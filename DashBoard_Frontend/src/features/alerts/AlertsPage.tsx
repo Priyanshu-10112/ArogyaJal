@@ -480,6 +480,27 @@ const AlertsPage: React.FC = () => {
                     {/* Description */}
                     <p style={{ margin: '10px 0', color: '#666' }}>{alert.description}</p>
 
+                    {/* Disease Names - Extract from description */}
+                    {(alert.description?.includes('Possible diseases:') || alert.description?.includes('Likely diseases:')) && (
+                      <div style={{ 
+                        margin: '10px 0', 
+                        padding: '10px 15px', 
+                        backgroundColor: '#fff3cd', 
+                        borderLeft: '4px solid #ffc107',
+                        borderRadius: '4px'
+                      }}>
+                        <div style={{ fontWeight: 'bold', color: '#856404', marginBottom: '5px', fontSize: '13px' }}>
+                          ⚠️ Possible Diseases:
+                        </div>
+                        <div style={{ color: '#856404', fontSize: '14px', fontWeight: '500' }}>
+                          {alert.description.includes('Possible diseases:') 
+                            ? alert.description.split('Possible diseases:')[1].trim()
+                            : alert.description.split('Likely diseases:')[1].split('.')[0].trim()
+                          }
+                        </div>
+                      </div>
+                    )}
+
                     {/* Details */}
                     <div style={{ display: 'flex', gap: '20px', fontSize: '14px', color: '#999' }}>
                       {alert.location && <span>📍 {coordsToLocation(alert.location)}</span>}

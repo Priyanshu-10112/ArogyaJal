@@ -4,6 +4,7 @@ import com.arogyajal.model.User;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.*;
 import com.google.cloud.Timestamp;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -13,6 +14,9 @@ import java.util.concurrent.ExecutionException;
 /**
  * Repository for User model.
  * Handles Firestore operations for user authentication and management.
+ * 
+ * IMPORTANT: Uses separate Firebase project (arogyajal-users) for user data
+ * to avoid quota conflicts with sensor/symptom data.
  */
 @Repository
 public class UserRepository {
@@ -20,7 +24,12 @@ public class UserRepository {
     private final Firestore firestore;
     private static final String COLLECTION_NAME = "users";
 
-    public UserRepository(Firestore firestore) {
+    /**
+     * Constructor with @Qualifier to inject the users-specific Firestore instance
+     * 
+     * @param firestore Firestore instance from FirebaseUsersConfig
+     */
+    public UserRepository(@Qualifier("usersFirestore") Firestore firestore) {
         this.firestore = firestore;
     }
 
@@ -376,5 +385,32 @@ public class UserRepository {
                 .whereEqualTo("role", role)
                 .get();
         return future.get().size();
+    }
+    
+    // ========== NEW METHODS FOR ROLE-BASED SYSTEM ==========
+    // These methods are added for the new role-based authentication
+    // They don't affect existing functionality
+    
+    /**
+     * Find users registered by a specific user
+     */
+    public List<User> findByRegisteredBy(String registrarId) {
+        try {
+            ApiFuture<QuerySnapshot> future = firestore.collection(COLLECTION_NAME)
+                    .whereEqualTo("registeredBy", registrarId)
+                    .get();
+            
+            List<QueryDocumentSnapshot> documents = future.get().getDocuments();
+            List<User> users = new ArrayList<>();
+            
+            for (QueryDocumentSnapshot document : documents) {
+                users.add(document.toObject(User.class));
+            }
+            
+            return users;
+            
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
     }
 }

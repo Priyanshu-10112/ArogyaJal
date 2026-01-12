@@ -1,9 +1,11 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import './GovSidebar.css';
 
 const GovSidebar: React.FC = () => {
     const location = useLocation();
+    const { permissions, isAuthenticated } = useAuth();
 
     const isActive = (path: string) => {
         return location.pathname === path;
@@ -17,7 +19,7 @@ const GovSidebar: React.FC = () => {
                     <h3 className="nav-section-title">
                         जल गुणवत्ता निगरानी | Water Quality Monitoring
                     </h3>
-                    <Link to="/" className={`gov-nav-link ${isActive('/') ? 'active' : ''}`}>
+                    <Link to="/dashboard" className={`gov-nav-link ${isActive('/dashboard') ? 'active' : ''}`}>
                         <svg className="nav-icon" width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
                             <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"/>
                         </svg>
@@ -137,7 +139,25 @@ const GovSidebar: React.FC = () => {
                     </Link>
                 </div>
 
-                {/* 5) Help/Support */}
+                {/* 5) Admin Section (Only if logged in with permission) */}
+                {isAuthenticated && permissions?.canRegisterUsers && (
+                    <div className="nav-section">
+                        <h3 className="nav-section-title">
+                            प्रशासन | Administration
+                        </h3>
+                        <Link 
+                            to="/admin/register-user" 
+                            className={`gov-nav-link ${isActive('/admin/register-user') ? 'active' : ''}`}
+                        >
+                            <svg className="nav-icon" width="18" height="18" viewBox="0 0 20 20" fill="currentColor">
+                                <path d="M8 9a3 3 0 100-6 3 3 0 000 6zM8 11a6 6 0 016 6H2a6 6 0 016-6zM16 7a1 1 0 10-2 0v1h-1a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1V7z"/>
+                            </svg>
+                            <span>Register User</span>
+                        </Link>
+                    </div>
+                )}
+
+                {/* 6) Help/Support */}
                 <div className="nav-section">
                     <h3 className="nav-section-title">
                         सहायता | Help/Support

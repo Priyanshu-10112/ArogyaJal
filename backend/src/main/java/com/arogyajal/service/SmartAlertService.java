@@ -296,11 +296,15 @@ public class SmartAlertService {
             reading.getSensorId(), parameter, severity, 30
         );
         
+        // Get possible diseases for this parameter
+        String possibleDiseases = getPossibleDiseasesForParameter(parameter);
+        
         Alert alert = Alert.builder()
             .alertType("WATER_QUALITY")
             .severity(severity)
             .title(parameter + " Level " + severity)
-            .description(String.format("%s reading: %.2f (confirmed)", parameter, value))
+            .description(String.format("%s reading: %.2f (confirmed). Possible diseases: %s", 
+                                      parameter, value, possibleDiseases))
             .location(reading.getLocation())
             .sensorId(reading.getSensorId())
             .parameter(parameter)
@@ -690,5 +694,27 @@ public class SmartAlertService {
         public String getAction() { return action; }
         public String getAlertId() { return alertId; }
         public String getReason() { return reason; }
+    }
+    
+    /**
+     * Get possible diseases based on water quality parameter
+     */
+    private String getPossibleDiseasesForParameter(String parameter) {
+        switch (parameter) {
+            case "pH":
+                return "Diarrhea, Skin irritation, Gastrointestinal issues";
+            case "Turbidity":
+                return "Cholera, Typhoid, Dysentery, Giardiasis";
+            case "TDS":
+                return "Kidney stones, Cardiovascular issues, Gastrointestinal problems";
+            case "Conductivity":
+                return "Diarrhea, Dehydration, Electrolyte imbalance";
+            case "Temperature":
+                return "Bacterial growth, Cholera, E.coli infection";
+            case "Dissolved Oxygen":
+                return "Bacterial contamination, Waterborne diseases";
+            default:
+                return "Waterborne diseases";
+        }
     }
 }

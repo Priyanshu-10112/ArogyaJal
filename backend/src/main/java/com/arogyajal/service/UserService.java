@@ -468,14 +468,6 @@ public class UserService {
     }
 
     /**
-     * Hash password (simplified - use BCrypt in production)
-     */
-    private String hashPassword(String plainPassword) {
-        // TODO: Implement proper password hashing with BCrypt
-        return "$2a$12$" + Base64.getEncoder().encodeToString(plainPassword.getBytes());
-    }
-
-    /**
      * Verify password (simplified - use BCrypt in production)
      */
     private boolean verifyPassword(String plainPassword, String passwordHash) {
@@ -547,9 +539,142 @@ public class UserService {
      * Validate role
      */
     private void validateRole(String role) {
-        List<String> validRoles = Arrays.asList("ASHA", "VILLAGER", "OFFICIAL", "ADMIN");
+        List<String> validRoles = Arrays.asList("ASHA", "VILLAGER", "OFFICIAL", "ADMIN",
+                "STATE_ADMIN", "DISTRICT_HEALTH_OFFICER", "LAB_OFFICIAL", 
+                "MEDICAL_OFFICER", "VILLAGE_HEALTH_OFFICER", "ASHA_WORKER", "CLINIC");
         if (!validRoles.contains(role)) {
             throw new IllegalArgumentException("Invalid role. Must be one of: " + validRoles);
         }
+    }
+    
+    // ========== NEW METHODS FOR ROLE-BASED SYSTEM ==========
+    // These methods are added for the new role-based authentication
+    // They don't affect existing functionality
+    
+    /**
+     * Get user from token (simple implementation)
+     * In production, use JWT with proper validation
+     */
+    public User getUserFromToken(String token) {
+        try {
+            // Remove "Bearer " prefix if present
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+            
+            // Simple token format: Bearer_userId_timestamp
+            if (token.startsWith("Bearer_")) {
+                String[] parts = token.split("_");
+                if (parts.length >= 2) {
+                    String userId = parts[1];
+                    return userRepository.findById(userId);
+                }
+            }
+            
+            return null;
+            
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    
+    /**
+     * Get users registered by a specific user
+     */
+    public List<User> getUsersRegisteredBy(String registrarId) {
+        try {
+            return userRepository.findByRegisteredBy(registrarId);
+        } catch (Exception e) {
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Authenticate user with email and password
+     * Returns null if authentication fails
+     */
+    public User authenticate(String email, String password) {
+        try {
+            User user = userRepository.findByEmail(email);
+            
+            if (user == null) {
+                return null;
+            }
+            
+            // Check if account is locked
+            if (user.getAccountLockedUntil() != null && 
+                user.getAccountLockedUntil().compareTo(Timestamp.now()) > 0) {
+                return null;
+            }
+            
+            // Verify password
+            if (!verifyPassword(password, user.getPasswordHash())) {
+                // Increment failed login attempts
+                int attempts = (user.getFailedLoginAttempts() != null ? user.getFailedLoginAttempts() : 0) + 1;
+                user.setFailedLoginAttempts(attempts);
+                
+                // Lock account after max attempts
+                if (attempts >= MAX_FAILED_ATTEMPTS) {
+                    Timestamp lockUntil = Timestamp.ofTimeSecondsAndNanos(
+                            Timestamp.now().getSeconds() + (LOCK_DURATION_HOURS * 3600), 0);
+                    user.setAccountLockedUntil(lockUntil);
+                }
+                
+                userRepository.update(user);
+                return null;
+            }
+            
+            // Reset failed attempts on successful login
+            user.setFailedLoginAttempts(0);
+            user.setAccountLockedUntil(null);
+            userRepository.update(user);
+            
+            return user;
+            
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    
+    /**
+     * Check if email exists
+     */
+    public boolean existsByEmail(String email) {
+        try {
+            return userRepository.existsByEmail(email);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    /**
+     * Check if phone exists
+     */
+    public boolean existsByPhone(String phone) {
+        try {
+            return userRepository.existsByPhoneNumber(phone);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+    
+    /**
+     * Save user (wrapper for repository save)
+     */
+    public User save(User user) {
+        try {
+            String id = userRepository.save(user);
+            return userRepository.findById(id);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to save user: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Hash password - public method for controllers
+     * TODO: Implement proper password hashing with BCrypt
+     */
+    public String hashPassword(String plainPassword) {
+        return "$2a$12$" + Base64.getEncoder().encodeToString(plainPassword.getBytes());
     }
 }

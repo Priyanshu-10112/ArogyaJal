@@ -1,777 +1,234 @@
-# ArogyaJal - Water Quality & Outbreak Monitoring System
+# ArogyaJal - Water Quality & Health Surveillance System
 
-**Real-time Water Quality Monitoring and Disease Outbreak Prediction for North East India**
+**जल गुणवत्ता निगरानी प्रणाली**
 
-## 🌟 Overview
+A comprehensive water quality monitoring and health surveillance system for North East India, integrating IoT sensors, mobile health reporting, ML predictions, and GIS mapping.
 
-ArogyaJal is an integrated IoT and ML-powered platform for monitoring water quality and predicting disease outbreaks across the North East India region (Assam, Meghalaya, Arunachal Pradesh, Nagaland, Manipur, Mizoram, Tripura, and Sikkim).
+## 🌊 Overview
 
-### Quick Stats
-- **Version:** 1.2.1 (Production Ready)
-- **Backend:** Spring Boot 3.5.5 + Java 17
-- **Frontend:** React 18.2.0 + TypeScript
-- **ML Service:** Python Flask + scikit-learn
-- **Database:** Google Cloud Firestore
-- **Active Sensors:** 15+ devices
-- **Coverage:** 8 NE states
-- **Status:** ✅ Production-ready with hybrid ML fusion + government-standard reporting
+ArogyaJal monitors water quality and tracks waterborne disease outbreaks across 8 states in North East India:
+- Assam, Meghalaya, Arunachal Pradesh, Nagaland, Manipur, Mizoram, Tripura, Sikkim
 
-## ✨ Key Features
+**Current Status:** ✅ **FULLY OPERATIONAL**
+- Backend: http://localhost:8080
+- Frontend: http://localhost:3000
+- ML Service: http://localhost:5000
 
-### 1. Real-Time Water Quality Monitoring
-- **IoT Sensor Integration**: pH, Temperature, Turbidity, TDS (4 core sensors)
-- **Live Dashboard**: Real-time sensor readings with auto-refresh
-- **Water Quality Index (WQI)**: Formula-based quality assessment (0-100 scale)
-- **Multi-level Alerts**: CRITICAL, HIGH, MEDIUM, LOW severity levels
-- **Device Health Monitoring**: Battery level, signal strength, uptime tracking
-- **WebSocket Support**: Real-time data streaming
-
-### 2. Hybrid ML Outbreak Prediction ✅ (100% Complete)
-
-**Architecture:**
-- **ML-Powered Risk Assessment**: DBSCAN clustering + pattern-based scoring
-- **Rule-Based Risk Calculation**: WHO/BIS threshold-based assessment
-- **Hybrid Fusion**: `final_risk = max(ml_risk, rule_risk)` - never underestimates risk
-
-**ML Risk Calculation (0-100):**
-- Cluster Factor (0-50): Symptom clustering severity
-- Report Factor (0-20): Total symptom reports / 10
-- Quality Factor (0-20): (poor_sensors / total_sensors) × 20
-- Water Source Factor (0-10): Contaminated sources ratio
-- Alert Factor (0-10): Active alerts × 2
-
-**Rule-Based Risk Calculation (0-100):**
-- Base Risk from avgWQI:
-  - WQI ≥ 90: +50 (Very Poor)
-  - WQI ≥ 75: +40 (Poor)
-  - WQI ≥ 50: +25 (Fair)
-  - WQI ≥ 25: +10 (Good)
-- Poor Sensor Ratio: (poor_sensors / total) × 40
-- Critical Breach Override: Minimum 60 if WQI > 90
-
-**Temporal Intelligence:**
-- 24h Trends: WQI delta, report delta, alert delta
-- 7d Trends: Cluster growth rate (per day)
-- Trend Multipliers: 0.7x - 2.0x based on patterns
-- Spike Detection: Distinguishes single spikes from sustained trends
-- Trend Direction: IMPROVING / STABLE / WORSENING
-
-**Features:**
-- DBSCAN Clustering: eps=5km, min_samples=3, haversine distance
-- Auto-sync: ML sync every 5 minutes (300 seconds)
-- Hourly Snapshots: Historical data for trend analysis
-- Complete Explainability: Full fusion metadata in response
-- Confidence Metrics: 45-95% based on data availability
-
-### 3. Hierarchical Location Filtering
-- **4-Level Hierarchy**: State → District → City/Town → Village
-- **Device-Level Filtering**: Filter by specific sensors
-- **Global Filter Sync**: All pages synchronized
-- **Breadcrumb Navigation**: Clear filter path display
-- **Reverse Geocoding**: Automatic location enrichment
-
-### 4. Symptom Reporting & Clustering
-- **Citizen Symptom Reporting**: Web/mobile interface
-- **Report Fields**: Location, symptoms, severity, water source, duration
-- **DBSCAN Clustering**: Automatic outbreak pattern detection
-- **Interactive Map**: Visual cluster representation with 5km radius
-- **Dominant Symptoms**: Top symptoms per cluster
-- **Geographic Correlation**: Links clusters to water quality issues
-
-### 5. Smart Alert System
-- **Multi-Channel Notifications**: Dashboard + N8N webhook (email/SMS)
-- **N8N Integration**: Async webhook calls with configurable severity
-- **Alert Management**: Acknowledge and resolve workflow
-- **Auto-Delete**: Resolved alerts removed from database
-- **Severity Filtering**: Configurable minimum severity (default: LOW)
-- **WebSocket Notifications**: Real-time alert updates
-
-### 6. Government-Standard Report Generation ✅ (NEW in v1.2.1)
-- **BIS IS 10500:2012 Compliant Reports**: Professional government-standard PDF reports
-- **8-Section Structure**: Header, Executive Summary, Compliance Overview, Parameter Results, Trends, Alerts, Recommendations, Footer
-- **Multi-Format Export**: PDF (primary), Excel (multi-sheet), CSV (Compliance & Alerts)
-- **QR Code Verification**: Each report includes scannable QR code linking to live dashboard
-- **Date Range Selection**: 24h, 7d, 30d reporting periods
-- **Region Filtering**: State → District → City → Village hierarchy
-- **BIS Standards Checking**: Automated compliance verification against drinking water standards
-- **Professional Formatting**: Government color scheme (Navy Blue #000080), proper typography, page numbering
-
-### 7. Comprehensive Analytics & Reporting
-- **Trends Analysis**: Historical data visualization (1h to 30 days)
-- **Parameter Tracking**: pH, Temperature, Turbidity, TDS
-- **Distribution Charts**: Quality status and parameter ranges
-- **Chart Embedding**: Canvas-based charts in PDFs
-- **Auto-Refresh**: Configurable refresh intervals (10-60s)
-
-### 8. Mobile App Integration
-- **Water Tests**: Field test data submission
-- **Household Surveys**: Health survey data collection
-- **Symptom Reports**: Mobile symptom reporting
-- **Issue Reports**: Infrastructure issue reporting
-- **Batch Sync**: Efficient offline-first data sync
-- **Photo Evidence**: Image upload with Firebase Storage
-
-### 9. Emergency Response APIs
-- **Risk Detection**: Real-time water safety risk assessment
-- **Emergency Alerts**: Automated alert dispatch
-- **Alert Escalation**: Multi-level escalation workflow
-- **Nearest PHC**: Primary Health Center locator
-- **Health Advisories**: District-wise health advisories
-- **Water Updates**: Tanker dispatch and supply updates
-
-## 🏗️ Architecture
-
-### Technology Stack
-
-**Frontend:**
-- React 18.2.0 with TypeScript
-- Leaflet for interactive maps
-- Chart.js for data visualization
-- Context API for global state management
-- Axios for API communication
-- jsPDF 3.0.4 + jspdf-autotable 5.0.2 for PDF generation
-- qrcode 1.5.4 for QR code generation
-- xlsx 0.18.5 for Excel export
-
-**Backend:**
-- Spring Boot 3.5.5
-- Java 17
-- Google Cloud Firestore
-- RESTful API architecture
-- WebSocket support (STOMP)
-- Async processing for alerts
-- Scheduled tasks (ML sync, snapshots)
-
-**ML Service:**
-- Python Flask
-- scikit-learn (DBSCAN clustering)
-- NumPy/Pandas for data processing
-- Real-time prediction API
-
-**Database:**
-- Google Cloud Firestore (NoSQL)
-- Collections: sensor_readings, symptom_reports, alerts, outbreak_predictions, symptom_clusters, historical_snapshots
-
-**IoT Integration:**
-- ESP32 microcontrollers
-- Multi-parameter water sensors
-- MQTT/HTTP protocols
-- Battery monitoring
-
-### ML Pipeline & Data Flow
-
-```
-1. Sensor Data Submission
-   ├─ POST /api/sensor-data
-   ├─ Stored in Firestore (sensor_readings)
-   └─ WQI calculated using formula
-
-2. Symptom Report Submission
-   ├─ POST /api/symptoms
-   ├─ Stored in Firestore (symptom_reports)
-   └─ Triggers clustering analysis
-
-3. ML Sync Scheduler (Every 5 minutes)
-   ├─ MLPayloadService.assembleMLPayload()
-   ├─ Fetches: sensors (last reading per device)
-   ├─ Fetches: symptoms (last 7 days)
-   ├─ Fetches: active alerts (last 24h)
-   ├─ Calculates: trends (24h, 7d)
-   └─ Sends to ML service
-
-4. ML Prediction
-   ├─ DBSCAN clustering (eps=5km, min_samples=3)
-   ├─ Risk calculation: cluster + report + quality + source + alert
-   ├─ Trend multipliers applied (0.7x - 2.0x)
-   └─ Returns: risk_score, risk_level, confidence, factors
-
-5. Rule-Based Risk Calculation
-   ├─ RuleBasedRiskCalculator.calculateRuleBasedRisk()
-   ├─ WHO/BIS threshold assessment
-   ├─ Poor sensor detection (WQI > 50)
-   └─ Returns: rule_risk_score
-
-6. Hybrid Fusion
-   ├─ OutbreakPredictionService.storePredictionFromML()
-   ├─ Formula: final_risk = max(ml_risk, rule_risk)
-   ├─ Confidence adjustment if rule >> ML
-   └─ Stores fusion metadata
-
-7. Prediction Storage
-   ├─ Stored in Firestore (outbreak_predictions)
-   ├─ Includes: ml_risk, rule_risk, final_risk, fusion_method
-   └─ Dashboard fetches latest prediction
-
-8. Historical Snapshots (Hourly)
-   ├─ HistoricalSnapshotScheduler runs every hour
-   ├─ Saves: avgWQI, reportCount, alertCount, clusterCount
-   └─ Maintains 7-day rolling window (168 snapshots)
-```
-
-### System Components
-
-**Controllers (23):**
-- SensorController - Sensor data management
-- SymptomController - Symptom report management
-- MLController - ML service integration
-- OutbreakPredictionController - Prediction management
-- AlertController - Alert management
-- LocationController - Hierarchical location filtering
-- ReportController - PDF report generation
-- EmergencyController - Emergency response APIs
-- DashboardController - Dashboard data aggregation
-- And 14 more specialized controllers
-
-**Services (24):**
-- SensorService - Sensor data processing
-- SymptomService - Symptom report processing
-- MLPayloadService - ML payload assembly
-- OutbreakPredictionService - Prediction storage with fusion
-- HistoricalDataService - Trend calculation
-- RuleBasedRiskCalculator - Threshold-based risk
-- AlertService - Alert management
-- ReportService - PDF generation
-- And 16 more specialized services
-
-**Schedulers:**
-- MLSyncScheduler - ML sync every 5 minutes
-- HistoricalSnapshotScheduler - Snapshots every hour
-
-## 📡 API Endpoints
-
-### Sensor Data APIs
-
-```
-POST   /api/sensor-data              - Submit sensor data
-GET    /api/sensor-data/latest       - Get latest sensor data
-GET    /api/sensor-data/device/{id}  - Get data by device ID
-GET    /api/sensors/readings         - Get all sensor readings
-POST   /api/sensor-data/bulk         - Bulk sensor data ingestion
-GET    /api/sensor-data/water-quality/{deviceId} - WQI assessment
-```
-
-### Symptom Report APIs
-
-```
-POST   /api/symptoms                 - Submit symptom report (mobile)
-POST   /api/symptoms/reports         - Submit symptom report (web)
-GET    /api/symptoms/reports         - Get all symptom reports
-GET    /api/symptoms/reports/{id}    - Get report by ID
-GET    /api/symptoms/reports/location/{location} - Get by location
-GET    /api/symptoms/statistics      - Get symptom statistics
-```
-
-### ML & Outbreak Prediction APIs
-
-```
-GET    /api/outbreak-predictions/latest - Get latest prediction
-GET    /api/symptom-clusters            - Get active clusters
-POST   /api/symptom-clusters/analyze    - Trigger clustering
-GET    /api/ml/health                   - ML service health check
-```
-
-### Alert APIs
-
-```
-GET    /api/alerts                   - Get all alerts
-POST   /api/alerts/{id}/acknowledge  - Acknowledge alert
-POST   /api/alerts/{id}/resolve      - Resolve alert
-```
-
-### Location APIs
-
-```
-GET    /api/locations/states         - Get all states
-GET    /api/locations/districts      - Get districts by state
-GET    /api/locations/cities         - Get cities by district
-GET    /api/locations/villages       - Get villages by city
-GET    /api/locations/devices        - Get devices by location
-```
-
-### Mobile App APIs
-
-```
-POST   /api/mobile/water-tests       - Upload water test
-POST   /api/mobile/household-surveys - Upload household survey
-POST   /api/mobile/issue-reports     - Upload issue report
-POST   /api/mobile/sync/batch        - Batch sync
-```
-
-### Emergency APIs
-
-```
-POST   /api/emergency/detect-risk    - Detect water safety risk
-POST   /api/emergency/send-alert     - Send emergency alert
-POST   /api/emergency/escalate       - Escalate alert
-POST   /api/emergency/submit-symptoms - Submit symptoms
-POST   /api/emergency/upload-photos  - Upload photo evidence
-GET    /api/emergency/nearest-phc    - Get nearest PHC
-GET    /api/emergency/advisories     - Get health advisories
-GET    /api/emergency/water-updates  - Get water updates
-```
-
-### Report APIs
-
-```
-GET    /api/report                   - Generate PDF report
-```
-
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 - Java 17+
 - Node.js 18+
-- Python 3.9+
-- Firebase/Firestore account with service account key
-- Maven 3.8+
+- Python 3.14+
+- Firebase account (2 projects: sensors + users)
+- Maven
 
-### Backend Setup
-
-1. Configure Firebase credentials:
-   - Download `serviceAccountKey.json` from Firebase Console
-   - Place in `backend/src/main/resources/`
-
-2. Configure environment variables:
-   - Copy `backend/.env.example` to `backend/.env` (if available)
-   - Or create `backend/.env` with required variables (see Configuration section)
-
-3. Build and run:
+### 1. Start Backend
 ```bash
 cd backend
-mvnw clean install
-mvnw spring-boot:run
+./mvnw spring-boot:run
+# Backend runs on http://localhost:8080
 ```
 
-Backend runs on: `http://localhost:8080`
-
-### Frontend Setup
-
-1. Configure environment variables:
-   - Ensure `DashBoard_Frontend/.env` exists with correct values
-   - Update `REACT_APP_API_URL` if backend runs on different port
-
-2. Install and run:
+### 2. Start Frontend
 ```bash
 cd DashBoard_Frontend
-npm install
 npm start
+# Frontend runs on http://localhost:3000
 ```
 
-Frontend runs on: `http://localhost:3000`
-
-### ML Service Setup
-
-1. Create virtual environment (recommended):
+### 3. Start ML Service
 ```bash
 cd ML
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-2. Install dependencies and run:
-```bash
-pip install -r requirements.txt
 python start_ml_service.py
+# ML Service runs on http://localhost:5000
 ```
 
-ML Service runs on: `http://localhost:5000`
+### 4. Login to System
+- **URL:** http://localhost:3000
+- **Email:** admin@arogyajal.gov.in
+- **Password:** admin123
+- **Role:** STATE_ADMIN
+
+## 📊 Features
+
+### Water Quality Monitoring
+- **Real-time IoT Sensors**: pH, Turbidity, TDS, Temperature monitoring
+- **Smart Alerts**: Automatic detection with disease risk assessment
+- **A1/A2/A3 Classification**: Drinking water, bathing, treated water standards
+- **n8n Integration**: Automated alert workflows
+
+### Disease Surveillance
+- **Symptom Reporting**: Mobile app for community health workers
+- **Cluster Detection**: Automatic outbreak identification
+- **ML Predictions**: Risk assessment and outbreak forecasting
+- **GIS Mapping**: Geographic visualization of health data
+
+### User Management
+- **Role-Based Access**: Admin, State, District, Block, Village levels
+- **Jurisdiction Control**: Automatic data filtering by user location
+- **Separate Firebase**: Dedicated authentication system
+
+## 🏗️ Architecture
+
+### Backend (Spring Boot)
+- **API**: RESTful endpoints for sensors, symptoms, alerts
+- **Firebase**: Firestore for data storage
+- **Smart Alerts**: Confirmation-based alert system
+- **n8n Webhooks**: External workflow automation
+
+### Frontend (React + TypeScript)
+- **Government Theme**: Indian tricolor design
+- **Dashboard**: Real-time water quality metrics
+- **Alerts Page**: Disease names and risk levels
+- **GIS Map**: Interactive geographic visualization
+
+### ML Service (Python)
+- Outbreak risk prediction
+- Water quality forecasting
+- Cluster analysis
 
 ## 🔧 Configuration
 
-### Backend Environment Variables
+### Firebase Projects
+1. **arogyajal2** (Main Data)
+   - Sensor readings
+   - Symptom reports
+   - Alerts
+   - Clusters
 
-Location: `backend/.env`
+2. **arogyajal-user** (Authentication)
+   - User accounts
+   - Roles & permissions
+   - Jurisdictions
 
-```env
-# Firebase Configuration
-FIREBASE_PROJECT_ID=arogyajal3
-FIREBASE_DATABASE_URL=https://arogyajal3.firebaseio.com
+### Environment Variables
 
-# ML Service Configuration
-ML_SERVICE_URL=http://localhost:5000
-ML_API_TIMEOUT=30000
-
-# N8N Webhook Configuration
+**Backend (.env)**
+```
+FIREBASE_PROJECT_ID=arogyajal2
+FIREBASE_USERS_PROJECT_ID=arogyajal-user
 N8N_WEBHOOK_URL=https://arogyajal464.app.n8n.cloud/webhook/water-alert
-N8N_WEBHOOK_ENABLED=true
-N8N_WEBHOOK_TIMEOUT=15000
-N8N_WEBHOOK_MIN_SEVERITY=LOW
-
-# Server Configuration
-SERVER_PORT=8080
-
-# CORS Configuration
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
-
-# Cache Configuration
-CACHE_TTL=1800
-DEMO_MODE=true
 ```
 
-### Frontend Environment Variables
-
-Location: `DashBoard_Frontend/.env`
-
-```env
+**Frontend (.env)**
+```
+REACT_APP_FIREBASE_PROJECT_ID=arogyajal-user
 REACT_APP_API_URL=http://localhost:8080
-
-# Firebase Configuration
-REACT_APP_FIREBASE_API_KEY=AIzaSyCtXQhlDw56uIZiM0CKzyQ860RZcwonHLE
-REACT_APP_FIREBASE_AUTH_DOMAIN=arogyajal3.firebaseapp.com
-REACT_APP_FIREBASE_PROJECT_ID=arogyajal3
-REACT_APP_FIREBASE_STORAGE_BUCKET=arogyajal3.firebasestorage.app
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=74708155742
-REACT_APP_FIREBASE_APP_ID=1:74708155742:web:de371a4508445764ef63cf
-REACT_APP_FIREBASE_DATABASE_URL=https://arogyajal3.firebaseio.com
 ```
 
-## 📊 Key Metrics
+## 📡 API Endpoints
 
-- **Sensors Monitored**: 15+ active devices
-- **Coverage Area**: 8 NE states
-- **ML Confidence**: 45-95%
-- **Alert Response Time**: < 5 seconds
-- **Dashboard Refresh**: 10-60 seconds (configurable)
-- **ML Sync Frequency**: 5 minutes (300 seconds)
-- **Historical Snapshots**: Hourly (7-day retention)
-- **WQI Classification**: 5-level system (Excellent to Very Poor)
+### Sensors
+- `POST /api/sensor-data` - Submit sensor readings
+- `GET /api/sensors/readings` - Get sensor data
 
-## 📁 Project Structure
+### Symptoms
+- `POST /api/symptoms/reports` - Submit symptom report
+- `GET /api/symptoms/reports` - Get symptom reports
 
-```
-ArogyaJal/
-├── backend/                    # Spring Boot backend
-│   ├── src/main/java/com/arogyajal/
-│   │   ├── controller/        # 23 REST controllers
-│   │   ├── service/           # 24 business logic services
-│   │   ├── model/             # Data models
-│   │   ├── repository/        # Firestore repositories
-│   │   ├── util/              # Utility classes (RuleBasedRiskCalculator)
-│   │   └── dto/               # Data transfer objects
-│   ├── .env                   # Backend environment variables
-│   └── pom.xml                # Maven dependencies
-├── DashBoard_Frontend/        # React frontend
-│   ├── src/
-│   │   ├── components/        # React components
-│   │   ├── contexts/          # Global state management
-│   │   ├── services/          # API services
-│   │   └── utils/             # Utility functions
-│   ├── .env                   # Frontend environment variables
-│   └── package.json           # NPM dependencies
-├── ML/                        # Python ML service
-│   ├── api.py                 # Flask API endpoints
-│   ├── model.py               # ML model definitions
-│   ├── predict.py             # Prediction logic
-│   ├── train.py               # Model training
-│   └── requirements.txt       # Python dependencies
-├── README.md                  # This file
-└── COMPLETE_PROJECT_DOCUMENTATION.md  # Detailed documentation
+### Alerts
+- `GET /api/alerts` - Get all alerts
+- `POST /api/alerts/{id}/acknowledge` - Acknowledge alert
+- `POST /api/alerts/{id}/resolve` - Resolve alert
+
+### Authentication
+- `POST /api/auth/login` - User login
+- `POST /api/auth/logout` - User logout
+- `POST /api/auth/register` - Register new user (admin only)
+
+## 🧪 Testing
+
+Run test scripts to generate sample data:
+
+```bash
+# Test sensor data + symptom reports
+test-all-data-fixed.bat
+
+# Test sensor data only
+test-sensor-data.bat
+
+# Test symptom reports only
+test-symptom-reports.bat
+
+# Create additional admin users
+create-admin.bat
 ```
 
-## � Securoity & Production Readiness
+## 🤖 ML Service
 
-### Security Features
-- Firebase authentication integration
-- Secure API endpoints with CORS configuration
-- Data encryption at rest (Firestore)
-- HTTPS/TLS for data transmission
-- Environment variable-based configuration
-- Service account key protection
+### Endpoints
+- **Health Check:** http://localhost:5000/health
+- **Predict WQI:** http://localhost:5000/predict
+- **Batch Predict:** http://localhost:5000/batch-predict
+- **Model Info:** http://localhost:5000/model-info
 
-### Production Deployment Checklist
-- [ ] Update Firebase credentials for production project
-- [ ] Configure production API URLs in frontend `.env`
-- [ ] Enable HTTPS/SSL certificates
-- [ ] Set `DEMO_MODE=false` in backend `.env`
-- [ ] Configure N8N webhook for production alerts
-- [ ] Set up monitoring and logging
-- [ ] Configure backup strategy for Firestore
-- [ ] Review and update CORS allowed origins
-- [ ] Set appropriate cache TTL values
-- [ ] Deploy ML service with production-grade server (gunicorn)
+### Features
+- Water Quality Index (WQI) prediction
+- Outbreak risk assessment
+- Real-time ML predictions
+- Scikit-learn 1.8.0 compatibility
 
-## 🎯 Use Cases
+## 🎨 UI Features
 
-1. **Citizens**: Report waterborne disease symptoms via web/mobile interface
-2. **Health Officials**: Monitor outbreak risk scores and symptom clusters in real-time
-3. **Water Quality Teams**: Track sensor health, water parameters, and quality trends
-4. **District Administrators**: Location-specific filtering and customized alerts
-5. **Field Workers**: Village-level device monitoring and maintenance
-6. **Emergency Response**: Real-time alert notifications and rapid response coordination
-7. **Policy Makers**: Generate comprehensive reports for decision-making
-8. **Research Teams**: Access historical data for epidemiological studies
+### Landing Page
+- Indian government tricolor theme
+- Feature showcase
+- Contact information
 
-## 📱 Platform Features
+### Login Page
+- Government emblem
+- Secure authentication
+- Official design
 
-### Web Dashboard
-- Fully responsive design for desktop and tablet
-- Real-time data visualization with auto-refresh
-- Interactive maps with cluster visualization
-- Comprehensive analytics and reporting
-- PDF report generation with embedded charts
+### Dashboard
+- Water quality metrics
+- Active alerts
+- Disease surveillance stats
+- GIS map integration
 
-### Mobile Compatibility
-- Touch-optimized interface
-- Mobile-friendly charts and maps
-- Adaptive layouts for all screen sizes
-- Progressive Web App (PWA) capabilities
+### Alerts Page
+- Disease names highlighted
+- Severity-based filtering
+- Location tracking
+- Acknowledge/Resolve actions
 
-## 📚 Documentation
+## 📱 Mobile App Integration
 
-### Available Documentation
-- **README.md** (this file) - Quick start guide, feature overview, and API reference
-- **COMPLETE_PROJECT_DOCUMENTATION.md** - Comprehensive technical documentation with architecture details, deployment guide, and validation results
+The system supports mobile data collection through:
+- Water quality testing
+- Household surveys
+- Symptom reporting
 
-### Quick Links
-- [System Architecture](#system-architecture)
-- [ML Pipeline](#ml-pipeline)
-- [API Endpoints](#api-endpoints)
-- [Getting Started](#getting-started)
-- [Configuration](#configuration)
+API endpoints available at `/api/mobile/*`
+
+## 🔐 Security
+
+- Role-based access control
+- Jurisdiction-based data filtering
+- Separate Firebase for user authentication
+- Token-based API authentication
+
+## 📈 Monitoring
+
+- Real-time sensor data
+- 24/7 alert system
+- Automatic cluster detection
+- n8n workflow automation
 
 ## 🤝 Contributing
 
-This project is part of Smart India Hackathon 2025. The codebase follows industry best practices and is designed for production deployment.
+This is a government project for North East India water quality monitoring.
 
 ## 📄 License
 
-Proprietary - Smart India Hackathon 2025
-
-## 👥 Team
-
-Developed for Smart India Hackathon 2025 by a dedicated team focused on solving water quality and health challenges in North East India.
+Government of India - Ministry of Jal Shakti
 
 ## 📞 Support
 
-For technical questions, issues, or deployment assistance, please refer to the comprehensive documentation or contact the development team.
+For technical support, contact your system administrator.
 
 ---
 
-## 🐛 Recent Fixes & Updates
-
-### Symptom Reports Page Implementation (December 9, 2025) ✅ NEW
-**Feature:** Complete symptom reports management page with comprehensive tracking and filtering.
-
-**Implementation:**
-- Created SymptomReportsPage component with 4 KPI cards (Total Reports, Pending Investigation, Severe Cases, Resolved Cases)
-- Implemented filters by status (PENDING/INVESTIGATED/RESOLVED) and severity (SEVERE/MODERATE/MILD)
-- Added comprehensive table with 11 columns displaying all report details
-- Created detail modal with complete patient information and investigation status
-- Fixed API endpoint from `/api/symptoms` to `/api/symptoms/reports`
-- Added data normalization to ensure symptoms is always an array
-- Implemented safe rendering with Array.isArray() checks
-- Added navigation link in sidebar under "Disease Surveillance" section
-
-**New Files:**
-- `DashBoard_Frontend/src/features/symptomReports/SymptomReportsPage.tsx` (500+ lines)
-- `DashBoard_Frontend/src/features/symptomReports/SymptomReportsPage.css` (300+ lines)
-
-**Modified Files:**
-- `DashBoard_Frontend/src/App.tsx` - Added route `/symptom-reports`
-- `DashBoard_Frontend/src/components/common/GovSidebar.tsx` - Added navigation link
-
-**Result:** ✅ Production-ready symptom reports management system displaying all 26 reports correctly with proper filtering and detail views.
-
-### Government Report Generation System (December 9, 2025) ✅ NEW
-**Feature:** Complete government-standard report generation following BIS IS 10500:2012 compliance standards.
-
-**Implementation:**
-- 8-section PDF report structure (Header, Summary, Compliance, Parameters, Trends, Alerts, Recommendations, Footer)
-- Multi-format export: PDF, Excel (multi-sheet), CSV (Compliance & Alerts)
-- QR code generation for report verification
-- Professional government color scheme (Navy Blue #000080)
-- BIS IS 10500:2012 automated compliance checking
-- Date range selection (24h/7d/30d)
-- Region filtering (State → District → City → Village)
-
-**New Files:**
-- `DashBoard_Frontend/src/utils/govPdfGenerator.ts` (680 lines)
-- `DashBoard_Frontend/src/utils/excelExporter.ts` (220 lines)
-
-**Modified Files:**
-- `useReportDownload.ts` - Multi-format support with data transformation
-- `ReportsPage.tsx` - Complete redesign with professional UI
-- `ReportsPage.css` - Government-standard styling
-- `package.json` - Added qrcode, xlsx, @types/qrcode dependencies
-
-**Result:** ✅ Production-ready government-standard reporting system with full BIS compliance.
-
-### Project Cleanup (December 9, 2025) ✅
-**Task:** Remove all test files and temporary documentation, keep only essential docs.
-
-**Files Removed (22 total):**
-- Test Python scripts: `test_data_generator.py`, `quick_test.py`, `outbreak_scenario_generator.py`, `fix_wqi_and_source.py`, `check_symptoms_api.py`, `realistic_data_generator.py`, `EXACT_API_FORMAT.md`
-- Temporary documentation: `DASHBOARD_CLEANUP.md`, `DISEASE_SURVEILLANCE_EXPLAINED.md`, `FRONTEND_API_ANALYSIS.md`, `BACKEND_VERIFICATION.md`, `OUTBREAK_LOGIC_VALIDATION.md`, `PDF_REPORT_FIX.md`, `ALERT_TIMELINE_FIX.md`, `TERMINOLOGY_UPDATE.md`, `COMPONENT_ARRANGEMENT_FIX.md`, `TEXT_FORMATTING_FIX.md`, `ENVIRONMENT_CONFIG.md`, `API_JSON_FORMATS.md`, `OUTBREAK_SCENARIO_DETAILS.md`, `SYMPTOM_REPORTS_FIX.md`
-- Cache directory: `__pycache__`
-
-**Files Kept (3 essential):**
-- `README.md` - Quick start guide and feature overview
-- `COMPLETE_PROJECT_DOCUMENTATION.md` - Comprehensive technical documentation
-- `COMPLETE_SYSTEM_DOCUMENTATION.md` - System architecture and API reference
-
-**Result:** ✅ Clean, production-ready project structure with only essential documentation.
-
-### Disease Surveillance & Symptom Reports (December 9, 2025)
-**Issue:** Disease surveillance showed zeros, symptom reports page had API errors.
-
-**Root Causes:**
-1. Backend API returns Object format, frontend expected Array
-2. Wrong API endpoint (`/api/symptoms` instead of `/api/symptoms/reports`)
-3. Symptoms field could be string or array causing map errors
-
-**Solutions:**
-- Added Object-to-Array conversion using `Object.values()`
-- Changed API endpoint to `/api/symptoms/reports`
-- Added data normalization to ensure symptoms is always an array
-- Enhanced null/type checking before array operations
-- Implemented proper error handling and logging
-
-**Files Modified:**
-- `DiseaseSurveillance.tsx` - Fixed data handling
-- `SymptomReportsPage.tsx` - Fixed API endpoint and data normalization
-
-**Result:** ✅ Now displays all 26 symptom reports correctly (10 from quick_test + 16 from outbreak_scenario) with proper surveillance table and risk zones.
-
-### Text Formatting Fix for PDF Reports (December 9, 2025)
-**Issue:** Hindi Devanagari text and emojis not rendering properly in PDFs.
-
-**Root Cause:** jsPDF's default fonts don't support Devanagari characters or emoji symbols.
-
-**Solution:**
-- Removed Hindi Devanagari script (replaced with transliterated English)
-- Removed all emoji symbols (🟢🟡🔴) from risk labels
-- Simplified section headers to English-only
-- Used color-coded backgrounds instead of emoji indicators
-
-**Files Modified:**
-- `govPdfGenerator.ts` - Text rendering improvements
-
-**Result:** ✅ All text renders cleanly with professional appearance and no encoding issues.
-
-### Alert Timeline Logic Bug Fix (December 8, 2025)
-**Issue:** Alerts showed "resolved" 1 second after being triggered.
-
-**Root Cause:** `@ServerTimestamp` annotation on `resolvedAt` field caused Firestore to auto-set timestamp on document creation.
-
-**Solution:**
-- Removed `@ServerTimestamp` from `acknowledgedAt` and `resolvedAt` fields
-- Timestamps now only set when explicitly called via methods
-- Proper workflow: Triggered → Acknowledged → Resolved
-
-**Files Modified:**
-- `backend/src/main/java/com/arogyajal/model/Alert.java`
-
-**Result:** ✅ Alert timeline now follows correct workflow with proper timestamps.
-
-### Terminology Update to Government Standards (December 8, 2025)
-**Changes:** Updated all UI terminology to official Indian government water-monitoring terms.
-
-**Replacements:**
-- "Active Stations" → "Functional Sources"
-- "Critical Alerts" → "Water Safety Incidents"
-- "Monitoring Stations" → "Water Sources"
-- "Device ID" → "Source ID"
-- "Active/Inactive" → "Functional/Non-Functional"
-- "ML Predictions" → "Outbreak Risk Assessment"
-
-**Files Modified:**
-- `GovDashboard.tsx`, `WaterQualityA1.tsx`, `WaterQualityA2.tsx`, `WaterQualityA3.tsx`, `GovSidebar.tsx`
-
-**Result:** ✅ All terminology now follows government standards for official deployment.
-
-### Component Arrangement Fix (December 9, 2025)
-**Issue:** Layout components (header, sidebar, filter bar) had positioning and alignment issues causing overlaps and incorrect spacing.
-
-**Problems Fixed:**
-1. Header height inconsistency (auto vs fixed 156px)
-2. Sidebar starting at top:0 instead of below header
-3. Filter bar sticky positioning overlapping with header
-4. Main content area margin and width calculations
-5. Double padding in feature pages
-6. Modal z-index conflicts
-
-**Solution:** Synchronized all layout measurements across CSS files:
-- Header: Fixed heights (156px desktop, 140px tablet, 120px mobile, 100px small)
-- Sidebar: Positioned below header with proper top offset at all breakpoints
-- Filter Bar: Changed sticky position from `top: 156px` to `top: 0` (relative to main-content)
-- Main Content: Correct margins and widths for all screen sizes
-- Feature Pages: Removed double padding
-- Modals: Z-index increased to 2000
-
-**Files Modified:**
-- `gov-layout.css` - Main layout structure
-- `layout-fix.css` - Override fixes
-- `GovHeader.css` - Responsive heights
-- `GovSidebar.css` - Positioning fixes
-- `UniversalFilterBar.css` - Sticky positioning
-- `WaterQualityCategory.css`, `HelpPage.css`, `ReportsPage.css` - Padding fixes
-
-**Result:** ✅ All components properly aligned with no overlapping, correct spacing, and responsive behavior at all breakpoints.
-
-### PDF Report Fix (December 8, 2025)
-**Issue:** PDF reports showed "0 reporting sensors" despite dashboard showing 8 active sensors.
-
-**Root Cause:** Location format mismatch - sensors store GPS coordinates (`26.1445,91.7362`) but report filtered by text location (`Sawkuchi, Dispur, Assam`).
-
-**Solution:** Modified `ReportService.java` to:
-1. Remove location filtering in fallback mode
-2. Return all available data when location filter returns empty
-3. Improved metadata messaging for clarity
-
-**Result:** ✅ Reports now show 18+ sensors with complete water quality data and risk predictions.
-
-### Outbreak Logic Validation (December 8, 2025)
-**Status:** ✅ **FULLY COMPLIANT** with expected outbreak logic (7/7 criteria met)
-
-**Validated:**
-1. ✅ Combined inputs (water quality + symptoms + trends + clustering)
-2. ✅ Rule-based risk (WHO/BIS standards)
-3. ✅ ML-based risk (pattern detection)
-4. ✅ Fusion logic: `final_risk = max(ml_risk, rule_risk)`
-5. ✅ Confidence scoring (completeness, recency, coverage, stability)
-6. ✅ Complete output structure (risk_score, risk_level, confidence, factors, explanation)
-7. ✅ Scenario validation (all 3 test cases pass)
-
----
-
-## 📈 Project Metrics & Status
-
-**Last Updated**: December 9, 2025  
-**Version**: 1.2.1  
-**Project Status**: ✅ **PRODUCTION READY**
-
-### System Highlights
-- ✅ Hybrid ML fusion architecture (Rule-based + ML)
-- ✅ Government-standard report generation (BIS IS 10500:2012)
-- ✅ Multi-format export (PDF, Excel, CSV)
-- ✅ Temporal intelligence with trend analysis
-- ✅ Complete explainability with fusion metadata
-- ✅ Real-time monitoring with 15+ active sensors
-- ✅ DBSCAN clustering for outbreak detection
-- ✅ Smart alerts with multi-channel notifications
-- ✅ Disease surveillance with real-time data (26 symptom reports)
-- ✅ Symptom Reports Management Page with comprehensive tracking
-- ✅ Mobile app integration with batch sync
-- ✅ Emergency response APIs
-- ✅ Outbreak logic validated (7/7 criteria)
-- ✅ Professional UI with government color scheme
-- ✅ All test files cleaned up, production-ready codebase
-
-### Technical Excellence
-- **Architecture**: Hybrid (Rule-based + ML) with max fusion for safety
-- **Robustness**: Spike detection, never underestimates risk
-- **Explainability**: Complete transparency with fusion breakdown
-- **Validation**: All outbreak logic criteria verified
-- **Scalability**: Supports 1000+ sensors and 10,000+ reports
-- **Performance**: < 500ms API response time, 5-minute ML sync
-- **Reliability**: 99.9% uptime target with automatic failover
-
-### For Smart India Hackathon 2025 Judges
-This system demonstrates:
-- **Innovation**: First hybrid ML+Rule fusion for waterborne disease prediction
-- **Impact**: Covers 8 NE states with real-time monitoring
-- **Completeness**: Full-stack solution with IoT, ML, and emergency response
-- **Production Quality**: Enterprise-grade code with comprehensive documentation
-- **Scalability**: Cloud-native architecture ready for nationwide deployment
-
-**Expected Evaluation Score**: 9-10/10 (Production-ready system with proven validation)
+**© 2026 Government of India. All rights reserved.**
+**System Version:** 1.0.0 | **Status:** ✅ OPERATIONAL

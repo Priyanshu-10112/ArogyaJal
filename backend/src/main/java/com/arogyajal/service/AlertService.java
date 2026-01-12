@@ -105,17 +105,39 @@ public class AlertService {
                 ? description 
                 : buildAlertMessageFromFields(severity, title, location);
             
+            // Parse location to extract village and district
+            String villageName = "Unknown Village";
+            String districtName = "Unknown District";
+            if (location != null && !location.isEmpty()) {
+                String[] parts = location.split(",");
+                if (parts.length >= 2) {
+                    villageName = parts[0].trim();
+                    districtName = parts[1].trim();
+                } else {
+                    villageName = location.trim();
+                }
+            }
+            
+            // Determine issue and reason based on severity and description
+            String issueDetected = determineIssue(severity, description, title);
+            String reason = determineReason(severity, description);
+            String possibleDiseases = determinePossibleDiseases(description, title);
+            String riskLevel = mapSeverityToN8N(severity);
+            String recommendedAction = determineRecommendedAction(severity);
+            
             // Build JSON payload in exact format required by n8n
             Map<String, Object> payload = new HashMap<>();
-            payload.put("alertId", alertId != null ? alertId : "UNKNOWN");
-            payload.put("severity", mapSeverityToN8N(severity));
-            payload.put("location", location != null ? location : "Unknown Location");
-            payload.put("message", message);
+            payload.put("villageName", villageName);
+            payload.put("districtName", districtName);
+            payload.put("issueDetected", issueDetected);
+            payload.put("reason", reason);
+            payload.put("possibleDiseases", possibleDiseases);
+            payload.put("riskLevel", riskLevel);
+            payload.put("action", recommendedAction);
             
             // Log payload before sending
-            log.info("n8n Payload: alertId={}, severity={}, location={}, message={}", 
-                    payload.get("alertId"), payload.get("severity"), 
-                    payload.get("location"), payload.get("message"));
+            log.info("n8n Payload: village={}, district={}, issue={}, risk={}", 
+                    villageName, districtName, issueDetected, riskLevel);
             
             // Set headers
             HttpHeaders headers = new HttpHeaders();
@@ -581,15 +603,20 @@ public class AlertService {
     private Alert createWaterQualityAlert(SensorReading reading, String parameter, double value) {
         try {
             String severity = getSeverityForParameter(parameter, value);
+            
+            // Get possible diseases based on parameter
+            String possibleDiseases = getPossibleDiseasesForParameter(parameter);
+            
             String title = String.format("%s %s Alert - %s",
                     parameter,
                     severity,
                     reading.getLocation() != null ? reading.getLocation() : "Unknown Location");
 
-            String description = String.format("%s value of %.2f is outside the normal range at %s",
+            String description = String.format("%s value of %.2f is outside the normal range at %s. Possible diseases: %s",
                     parameter,
                     value,
-                    reading.getLocation() != null ? reading.getLocation() : "an unknown location");
+                    reading.getLocation() != null ? reading.getLocation() : "an unknown location",
+                    possibleDiseases);
 
             Alert alert = new Alert();
             alert.setAlertType("WATER_QUALITY");
@@ -609,15 +636,89 @@ public class AlertService {
             throw new RuntimeException("Failed to create water quality alert", e);
         }
     }
+    
+    /**
+     * Get possible diseases based on water quality parameter
+     */
+    private String getPossibleDiseasesForParameter(String parameter) {
+        switch (parameter) {
+            case "pH":
+                return "Diarrhea, Skin irritation, Gastrointestinal issues";
+            case "Turbidity":
+                return "Cholera, Typhoid, Dysentery, Giardiasis";
+            case "TDS":
+                return "Kidney stones, Cardiovascular issues, Gastrointestinal problems";
+            case "Conductivity":
+                return "Diarrhea, Dehydration, Electrolyte imbalance";
+            case "Temperature":
+                return "Bacterial growth, Cholera, E.coli infection";
+            case "Dissolved Oxygen":
+                return "Bacterial contamination, Waterborne diseases";
+            default:
+                return "Waterborne diseases";
+        }
+    }
+    
+    /**
+     * Determine likely diseases based on symptom patterns
+     */
+    private String determineLikelyDiseases(Map<String, Long> symptomCounts) {
+        java.util.List<String> diseases = new java.util.ArrayList<>();
+        
+        // Check for Cholera indicators
+        if (symptomCounts.containsKey("DIARRHEA") && symptomCounts.containsKey("VOMITING") && 
+            symptomCounts.containsKey("DEHYDRATION")) {
+            diseases.add("Cholera");
+        }
+        
+        // Check for Typhoid indicators
+        if (symptomCounts.containsKey("FEVER") && symptomCounts.containsKey("HEADACHE") && 
+            symptomCounts.containsKey("ABDOMINAL_PAIN")) {
+            diseases.add("Typhoid");
+        }
+        
+        // Check for Dysentery indicators
+        if (symptomCounts.containsKey("DIARRHEA") && symptomCounts.containsKey("BLOOD_IN_STOOL")) {
+            diseases.add("Dysentery");
+        }
+        
+        // Check for Gastroenteritis indicators
+        if (symptomCounts.containsKey("DIARRHEA") && symptomCounts.containsKey("NAUSEA")) {
+            diseases.add("Gastroenteritis");
+        }
+        
+        // Check for Hepatitis A indicators
+        if (symptomCounts.containsKey("JAUNDICE") && symptomCounts.containsKey("FATIGUE")) {
+            diseases.add("Hepatitis A");
+        }
+        
+        // Default if no specific pattern
+        if (diseases.isEmpty()) {
+            if (symptomCounts.containsKey("DIARRHEA")) {
+                diseases.add("Diarrheal diseases");
+            } else {
+                diseases.add("Waterborne diseases");
+            }
+        }
+        
+        return String.join(", ", diseases);
+    }
 
     private void createSymptomClusterAlert(String location, List<SymptomReport> reports) {
+        // Analyze symptoms to determine likely diseases
+        Map<String, Long> symptomCounts = reports.stream()
+            .flatMap(r -> r.getSymptoms().stream())
+            .collect(java.util.stream.Collectors.groupingBy(s -> s, java.util.stream.Collectors.counting()));
+        
+        String likelyDiseases = determineLikelyDiseases(symptomCounts);
+        
         // Create alert
         Alert alert = Alert.builder()
                 .alertType("SYMPTOM_CLUSTER")
                 .severity("HIGH")
                 .title("Symptom Cluster Alert")
-                .description(String.format("High number of symptom reports (%d) in the last 24 hours in %s",
-                        reports.size(), location))
+                .description(String.format("High number of symptom reports (%d) in the last 24 hours in %s. Likely diseases: %s",
+                        reports.size(), location, likelyDiseases))
                 .location(location)
                 .relatedSymptomReportIds(reports.stream().map(SymptomReport::getId).toList())
                 .build();
@@ -646,8 +747,10 @@ public class AlertService {
             // Calculate cluster score
             double clusterScore = (reports.size() * 10) + (severeCount * 5) + (moderateCount * 2);
             
-            // Build cluster object with ALL required fields
+            // Build cluster object with ALL required fields including ID
+            String clusterId = java.util.UUID.randomUUID().toString();
             com.arogyajal.model.SymptomCluster cluster = com.arogyajal.model.SymptomCluster.builder()
+                    .id(clusterId)
                     .location(location)
                     .reportCount(reports.size())
                     .reportIds(reports.stream().map(SymptomReport::getId).toList())
@@ -661,7 +764,7 @@ public class AlertService {
                     .build();
             
             clusterService.createCluster(cluster);
-            log.info("Created cluster object for location: {} with {} reports", location, reports.size());
+            log.info("Created cluster object {} for location: {} with {} reports", clusterId, location, reports.size());
             
         } catch (Exception e) {
             log.error("Error creating cluster object: {}", e.getMessage(), e);
@@ -806,6 +909,79 @@ public class AlertService {
         } catch (Exception e) {
             log.error("Error fetching alerts by time range", e);
             return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Determine the issue detected based on alert details
+     */
+    private String determineIssue(String severity, String description, String title) {
+        if (description != null) {
+            if (description.contains("pH")) return "Abnormal pH levels detected";
+            if (description.contains("Turbidity")) return "High turbidity in water";
+            if (description.contains("TDS") || description.contains("Total Dissolved Solids")) return "High TDS levels";
+            if (description.contains("Conductivity")) return "High conductivity detected";
+            if (description.contains("Temperature")) return "Abnormal water temperature";
+            if (description.contains("symptom")) return "Health symptom cluster detected";
+        }
+        if (title != null) {
+            if (title.contains("pH")) return "Abnormal pH levels detected";
+            if (title.contains("Turbidity")) return "High turbidity in water";
+            if (title.contains("Symptom")) return "Health symptom cluster detected";
+        }
+        return "Water quality issue detected";
+    }
+    
+    /**
+     * Determine the reason for the alert
+     */
+    private String determineReason(String severity, String description) {
+        if (description != null) {
+            if (description.contains("pH")) return "pH value outside safe range (6.5-8.5)";
+            if (description.contains("Turbidity")) return "Turbidity exceeds safe limit (>5 NTU)";
+            if (description.contains("TDS")) return "Total Dissolved Solids exceed safe limit (>500 ppm)";
+            if (description.contains("Conductivity")) return "Conductivity exceeds safe limit (>1000 µS/cm)";
+            if (description.contains("Temperature")) return "Water temperature exceeds safe limit (>30°C)";
+            if (description.contains("symptom")) return "Multiple health reports in the area";
+        }
+        return "Water quality parameters outside safe range";
+    }
+    
+    /**
+     * Determine possible diseases based on alert type
+     */
+    private String determinePossibleDiseases(String description, String title) {
+        if (description != null || title != null) {
+            String combined = (description != null ? description : "") + " " + (title != null ? title : "");
+            if (combined.contains("symptom") || combined.contains("Symptom")) {
+                return "Diarrhea, Cholera, Typhoid, Dysentery";
+            }
+            if (combined.contains("pH") || combined.contains("Turbidity") || combined.contains("TDS")) {
+                return "Waterborne diseases, Gastrointestinal issues";
+            }
+        }
+        return "Waterborne diseases";
+    }
+    
+    /**
+     * Determine recommended action based on severity
+     */
+    private String determineRecommendedAction(String severity) {
+        if (severity == null) return "Monitor water quality and investigate source";
+        
+        switch (severity.toUpperCase()) {
+            case "CRITICAL":
+                return "IMMEDIATE ACTION: Stop water supply, issue public warning, deploy emergency response team";
+            case "HIGH":
+                return "URGENT: Investigate source immediately, notify health officials, consider temporary water restrictions";
+            case "MEDIUM":
+            case "MODERATE":
+                return "Investigate within 24 hours, increase monitoring frequency, notify local authorities";
+            case "LOW":
+            case "MILD":
+                return "Schedule routine inspection, continue monitoring, document findings";
+            default:
+                return "Monitor water quality and investigate source";
         }
     }
 }

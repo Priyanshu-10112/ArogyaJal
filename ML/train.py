@@ -6,8 +6,8 @@ This module contains functions for training the water quality prediction model.
 
 import pandas as pd
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
-from .model import WaterQualityPredictor
-from .preprocess import generate_sample_data, preprocess_data
+from model import WaterQualityPredictor
+from preprocess import generate_sample_data, preprocess_data
 
 def train_model(X_train, y_train, model_params=None):
     """

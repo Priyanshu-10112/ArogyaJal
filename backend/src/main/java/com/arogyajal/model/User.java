@@ -15,18 +15,36 @@ public class User {
     
     private String username; // Unique username
     private String passwordHash; // BCrypt hashed password
-    private String role; // ASHA, VILLAGER, OFFICIAL, ADMIN
+    private String role; // STATE_ADMIN, DISTRICT_HEALTH_OFFICER, LAB_OFFICIAL, MEDICAL_OFFICER, VILLAGE_HEALTH_OFFICER, ASHA_WORKER, CLINIC
     
     // Personal information
     private String fullName;
     private String phoneNumber; // Unique, used for login
     private String email;
     
-    // Location information
+    // Location information (Jurisdiction)
     private String village;
+    private String block; // Block/Tehsil
     private String district;
     private String state;
     private String pincode;
+    
+    // Role-specific fields
+    private String designation; // "Medical Officer", "ASHA Worker", etc.
+    private String employeeId; // Official employee/ASHA ID
+    private String phcName; // For Medical Officers
+    private String clinicName; // For Clinics
+    private String labId; // For Lab Officials
+    
+    // Registration chain
+    private String registeredBy; // User ID of who registered this user
+    private Timestamp registeredAt;
+    
+    // Permissions
+    private Boolean canRegisterUsers; // Can register users below them
+    private Boolean canUpdateSensors; // Can update sensor status
+    private Boolean canInvestigateReports; // Can investigate symptom reports
+    private Boolean canResolveReports; // Can resolve symptom reports
     
     // Preferences
     private String language; // hi, en, ta, te, bn, mr, gu
@@ -325,6 +343,103 @@ public class User {
         this.accountLockedUntil = accountLockedUntil;
     }
     
+    // New getters and setters for role-based system
+    public String getBlock() {
+        return block;
+    }
+    
+    public void setBlock(String block) {
+        this.block = block;
+    }
+    
+    public String getDesignation() {
+        return designation;
+    }
+    
+    public void setDesignation(String designation) {
+        this.designation = designation;
+    }
+    
+    public String getEmployeeId() {
+        return employeeId;
+    }
+    
+    public void setEmployeeId(String employeeId) {
+        this.employeeId = employeeId;
+    }
+    
+    public String getPhcName() {
+        return phcName;
+    }
+    
+    public void setPhcName(String phcName) {
+        this.phcName = phcName;
+    }
+    
+    public String getClinicName() {
+        return clinicName;
+    }
+    
+    public void setClinicName(String clinicName) {
+        this.clinicName = clinicName;
+    }
+    
+    public String getLabId() {
+        return labId;
+    }
+    
+    public void setLabId(String labId) {
+        this.labId = labId;
+    }
+    
+    public String getRegisteredBy() {
+        return registeredBy;
+    }
+    
+    public void setRegisteredBy(String registeredBy) {
+        this.registeredBy = registeredBy;
+    }
+    
+    public Timestamp getRegisteredAt() {
+        return registeredAt;
+    }
+    
+    public void setRegisteredAt(Timestamp registeredAt) {
+        this.registeredAt = registeredAt;
+    }
+    
+    public Boolean getCanRegisterUsers() {
+        return canRegisterUsers;
+    }
+    
+    public void setCanRegisterUsers(Boolean canRegisterUsers) {
+        this.canRegisterUsers = canRegisterUsers;
+    }
+    
+    public Boolean getCanUpdateSensors() {
+        return canUpdateSensors;
+    }
+    
+    public void setCanUpdateSensors(Boolean canUpdateSensors) {
+        this.canUpdateSensors = canUpdateSensors;
+    }
+    
+    public Boolean getCanInvestigateReports() {
+        return canInvestigateReports;
+    }
+    
+    public void setCanInvestigateReports(Boolean canInvestigateReports) {
+        this.canInvestigateReports = canInvestigateReports;
+    }
+    
+    public Boolean getCanResolveReports() {
+        return canResolveReports;
+    }
+    
+    public void setCanResolveReports(Boolean canResolveReports) {
+        this.canResolveReports = canResolveReports;
+    }
+    
     @Override
     public String toString() {
         return "User{" +
@@ -354,9 +469,21 @@ public class User {
         private String phoneNumber;
         private String email;
         private String village;
+        private String block;
         private String district;
         private String state;
         private String pincode;
+        private String designation;
+        private String employeeId;
+        private String phcName;
+        private String clinicName;
+        private String labId;
+        private String registeredBy;
+        private Timestamp registeredAt;
+        private Boolean canRegisterUsers = false;
+        private Boolean canUpdateSensors = false;
+        private Boolean canInvestigateReports = false;
+        private Boolean canResolveReports = false;
         private String language = "hi"; // Default Hindi
         private Boolean notificationsEnabled = true;
         private Boolean smsEnabled = true;
@@ -515,6 +642,66 @@ public class User {
             return this;
         }
         
+        public Builder block(String block) {
+            this.block = block;
+            return this;
+        }
+        
+        public Builder designation(String designation) {
+            this.designation = designation;
+            return this;
+        }
+        
+        public Builder employeeId(String employeeId) {
+            this.employeeId = employeeId;
+            return this;
+        }
+        
+        public Builder phcName(String phcName) {
+            this.phcName = phcName;
+            return this;
+        }
+        
+        public Builder clinicName(String clinicName) {
+            this.clinicName = clinicName;
+            return this;
+        }
+        
+        public Builder labId(String labId) {
+            this.labId = labId;
+            return this;
+        }
+        
+        public Builder registeredBy(String registeredBy) {
+            this.registeredBy = registeredBy;
+            return this;
+        }
+        
+        public Builder registeredAt(Timestamp registeredAt) {
+            this.registeredAt = registeredAt;
+            return this;
+        }
+        
+        public Builder canRegisterUsers(Boolean canRegisterUsers) {
+            this.canRegisterUsers = canRegisterUsers;
+            return this;
+        }
+        
+        public Builder canUpdateSensors(Boolean canUpdateSensors) {
+            this.canUpdateSensors = canUpdateSensors;
+            return this;
+        }
+        
+        public Builder canInvestigateReports(Boolean canInvestigateReports) {
+            this.canInvestigateReports = canInvestigateReports;
+            return this;
+        }
+        
+        public Builder canResolveReports(Boolean canResolveReports) {
+            this.canResolveReports = canResolveReports;
+            return this;
+        }
+        
         public User build() {
             User user = new User();
             user.setId(id);
@@ -525,9 +712,21 @@ public class User {
             user.setPhoneNumber(phoneNumber);
             user.setEmail(email);
             user.setVillage(village);
+            user.setBlock(block);
             user.setDistrict(district);
             user.setState(state);
             user.setPincode(pincode);
+            user.setDesignation(designation);
+            user.setEmployeeId(employeeId);
+            user.setPhcName(phcName);
+            user.setClinicName(clinicName);
+            user.setLabId(labId);
+            user.setRegisteredBy(registeredBy);
+            user.setRegisteredAt(registeredAt);
+            user.setCanRegisterUsers(canRegisterUsers);
+            user.setCanUpdateSensors(canUpdateSensors);
+            user.setCanInvestigateReports(canInvestigateReports);
+            user.setCanResolveReports(canResolveReports);
             user.setLanguage(language);
             user.setNotificationsEnabled(notificationsEnabled);
             user.setSmsEnabled(smsEnabled);

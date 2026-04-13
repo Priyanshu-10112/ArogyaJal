@@ -9,11 +9,6 @@ A comprehensive water quality monitoring and health surveillance system for Nort
 ArogyaJal monitors water quality and tracks waterborne disease outbreaks across 8 states in North East India:
 - Assam, Meghalaya, Arunachal Pradesh, Nagaland, Manipur, Mizoram, Tripura, Sikkim
 
-**Current Status:** ✅ **FULLY OPERATIONAL**
-- Backend: http://localhost:8080
-- Frontend: http://localhost:3000
-- ML Service: http://localhost:5000
-
 ## 🚀 Quick Start
 
 ### Prerequisites

@@ -4,6 +4,14 @@
 
 A comprehensive water quality monitoring and health surveillance system for North East India, integrating IoT sensors, mobile health reporting, ML predictions, and GIS mapping.
 
+## Project context and contribution
+
+ArogyaJal is the SIH 2025 winning Team CORE_401 project, deployed for government use. Priyanshu Sharma contributed as a student backend developer from August 2025 to March 2026; this project contribution is not an employment position.
+
+His work includes Spring Boot REST APIs, Firebase Firestore integration, real-time WebSocket alerts, offline synchronization and integration of sensor and ML-assisted workflows.
+
+[Public project website](https://arogyajal.netlify.app/) · [Portfolio case study](https://priyanshu-sharma.tech/#projects)
+
 ## 🌊 Overview
 
 ArogyaJal monitors water quality and tracks waterborne disease outbreaks across 8 states in North East India:
@@ -40,10 +48,9 @@ python start_ml_service.py
 ```
 
 ### 4. Login to System
-- **URL:** http://localhost:3000
-- **Email:** admin@arogyajal.gov.in
-- **Password:** admin123
-- **Role:** STATE_ADMIN
+
+Open `http://localhost:3000` and sign in with an account created in your own local Firebase authentication project. Assign the appropriate role and jurisdiction for your test setup; deployment credentials are not distributed in this repository.
+
 
 ## 📊 Features
 
@@ -103,7 +110,7 @@ python start_ml_service.py
 ```
 FIREBASE_PROJECT_ID=arogyajal2
 FIREBASE_USERS_PROJECT_ID=arogyajal-user
-N8N_WEBHOOK_URL=https://arogyajal464.app.n8n.cloud/webhook/water-alert
+N8N_WEBHOOK_URL=<your-own-n8n-webhook-url>
 ```
 
 **Frontend (.env)**

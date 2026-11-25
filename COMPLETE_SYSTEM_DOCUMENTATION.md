@@ -13,8 +13,8 @@
 ## Admin Access
 
 ### Default Admin Credentials
-- **Email:** admin@arogyajal.gov.in
-- **Password:** admin123
+- **Email:** local-admin@example.test
+- **Password:** <your-local-test-password>
 - **Role:** STATE_ADMIN
 - **Permissions:** Full system access
 
@@ -714,7 +714,7 @@ For technical assistance:
 ---
 
 **System Version:** 1.0.0
-**Last Updated:** December 2024
+**Last Updated:** November 26, 2026
 **Maintained by:** Government of India - Ministry of Jal Shakti
 
 ## Quick Start Guide
@@ -736,7 +736,7 @@ python start_ml_service.py
 
 ### 2. Access System
 - **Dashboard:** http://localhost:3000
-- **Login:** admin@arogyajal.gov.in / admin123
+- **Login:** local-admin@example.test / <your-local-test-password>
 - **Backend API:** http://localhost:8080
 - **ML API:** http://localhost:5000
 
@@ -761,5 +761,5 @@ python start_ml_service.py
 
 **System Status:** ✅ FULLY OPERATIONAL
 **Version:** 1.0.0
-**Last Updated:** January 2026
+**Last Updated:** November 26, 2026
 **Maintained by:** Government of India - Ministry of Jal Shakti
